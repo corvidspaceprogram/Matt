@@ -3,7 +3,9 @@ import random
 import time
 
 def calculate_refresh_interval():
-    return random.randint(1800, 10800)  # Between 30 mins to 3 hours
+    #return random.randint(1800, 10800)  # Between 30 mins to 3 hours
+    #return random.randint(30, 300) # between 30s and 5 mins
+    return random.randint(1800, 64800) # Between 30 mins and 24 hours
 
 def calculate_next_refresh(current_time, refresh_interval):
     return current_time + timedelta(seconds=refresh_interval)
