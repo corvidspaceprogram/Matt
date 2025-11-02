@@ -1,4 +1,5 @@
 from mastodon import Mastodon
+from text_cleaner import clean_content
 import json
 
 def init_mastodon(api_base_url, access_token):
@@ -145,3 +146,41 @@ def truncate_post_file(max_context_length, prompt):
     except Exception as e:
         print(f"Error truncating post file: {e}")
         return []
+
+# Fetches the parents of a post chain. 
+def fetch_context(api, status):
+    full_context = api.status_context(status['id'])
+
+    out = ""
+
+    for ancestor in full_context['ancestors']:
+        out += "@" + ancestor['account']['username'] + ": "
+        out += "\"" + clean_content(ancestor['content']) + "\"\n "
+
+    out += "@" + status['account']['username'] + ": @gronk "
+    out += "\"" + clean_content(status['content']) + "\""
+
+    return(out)
+
+def post_public(api, text, char_limit):
+    if len(text) > char_limit:
+        text = text[:char_limit]
+    response = api.status_post(status=text, spoiler_text="LLM-generated post", language="EN", visibility="public")
+    print(f"Posted successfully: {response['url']}")
+
+def post_dm(api, text, char_limit, target_account):
+    post_text = target_account + "\n\n" + text
+    if len(post_text) > char_limit:
+        post_text = post_text[:char_limit]
+    response = api.status_post(status=post_text, spoiler_text="LLM-generated post", language="EN", visibility="direct")
+    print(f"Posted successfully: {response['url']}")
+
+def post_reply(api, text, char_limit, original_status):
+    if len(text) > char_limit:
+        text = text[:char_limit]
+
+    # status_reply prepends mentions for the accounts being replied to and retains the visibility of the previous post automatically.
+    response = api.status_reply(status=text, to_status=original_status, spoiler_text="LLM-generated post", language="EN")
+
+    print(f"Posted successfully: {response['url']}")
+

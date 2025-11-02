@@ -9,6 +9,8 @@ def get_env_variable(key, prompt_message=None):
     if not value and prompt_message:
         value = input(prompt_message)
         save_env_variable(key, value)
+    elif not value and not prompt_message:
+        raise ValueError("Value not defined for .env variable " + key)
     return value
 
 def save_env_variable(key, value):
