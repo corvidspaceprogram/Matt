@@ -28,23 +28,11 @@ def fetch_account_posts(api, account_id, clean_func):
         print(f"Error fetching posts: {e}")
         return []
 
-def fetch_instance_posts(api, clean_func):
-    try:
-        posts = []
-        max_id = None
-        while len(posts) < 200:
-            batch = api.timeline_local(max_id=max_id)
-            if not batch:
-                break
-            posts.extend([clean_func(status["content"]) for status in batch])
-            max_id = batch[-1]["id"]
-        return posts
-    except Exception as e:
-        print(f"Error fetching posts: {e}")
-        return []
-
 def store_instance_posts(api, max_context_length, clean_func):
+    
     try:
+        my_username = api.me()['username']
+
         posts = dict()
         max_id=None
         while len(json.dumps(posts)) < max_context_length:
@@ -52,8 +40,7 @@ def store_instance_posts(api, max_context_length, clean_func):
             if not batch:
                 break
             for status in batch:
-                # TODO - don't have gronk hardcoded here
-                if status['account']['username'] != "gronk":
+                if status['account']['username'] != my_username:
                     posts.update({status["id"]: clean_func(status["content"])})
             max_id = batch[-1]["id"]
 
@@ -90,6 +77,8 @@ def convert_instance_posts_txt():
 
 def update_instance_posts(api, max_context_length, clean_func):
     try:
+        my_username = api.me()['username']
+
         with open('posts.json', 'r', encoding='utf-8') as f:
             posts = json.load(f)
         
@@ -106,11 +95,13 @@ def update_instance_posts(api, max_context_length, clean_func):
                 break
             for status in batch:
                 # Add to empty dictionary
-                new_posts.update({status["id"]: clean_func(status["content"])})
+                if status['account']['username'] != my_username:
+                    new_posts.update(\
+                        {status["id"]: clean_func(status["content"])})
 
             max_id = batch[-1]["id"]
 
-            print("Added new context: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.")
+            print("Added new context: " + str(len(json.dumps(new_posts))) + " / " + str(max_context_length) + " chars.")
 
         # Append original posts to new_posts dictionary
         new_posts.update(posts)
