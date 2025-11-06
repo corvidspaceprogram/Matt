@@ -98,6 +98,9 @@ class LlmPoster():
             print(" > ERROR:")
             print(msg)
 
+        with open('errorlog.txt', "a") as f:
+            f.write(msg)
+
         # DM admin account that something went wrong.
         if self.admin_account is not None:
             mastodon_client.post_dm(self.mastodon_api, \

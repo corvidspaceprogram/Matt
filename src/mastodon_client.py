@@ -1,5 +1,5 @@
 from mastodon import Mastodon
-from text_cleaner import clean_content
+from text_cleaner import clean_content_keep_usernames
 import json
 
 def init_mastodon(api_base_url, access_token):
@@ -52,7 +52,9 @@ def store_instance_posts(api, max_context_length, clean_func):
             if not batch:
                 break
             for status in batch:
-                posts.update({status["id"]: clean_func(status["content"])})
+                # TODO - don't have gronk hardcoded here
+                if status['account']['username'] != "gronk":
+                    posts.update({status["id"]: clean_func(status["content"])})
             max_id = batch[-1]["id"]
 
             print("Stored context: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.")
@@ -155,24 +157,25 @@ def fetch_context(api, status):
 
     for ancestor in full_context['ancestors']:
         out += "@" + ancestor['account']['username'] + ": "
-        out += "\"" + clean_content(ancestor['content']) + "\"\n "
+        out += "\"" + clean_content_keep_usernames(\
+            ancestor['content']) + "\"\n "
 
-    out += "@" + status['account']['username'] + ": @gronk "
-    out += "\"" + clean_content(status['content']) + "\""
+    out += "@" + status['account']['username'] + ": "
+    out += "\"" + clean_content_keep_usernames(status['content']) + "\""
 
     return(out)
 
 def post_public(api, text, char_limit):
     if len(text) > char_limit:
         text = text[:char_limit]
-    response = api.status_post(status=text, spoiler_text="LLM-generated post", language="EN", visibility="public")
+    response = api.status_post(status=text, language="EN", visibility="public")
     print(f"Posted successfully: {response['url']}")
 
 def post_dm(api, text, char_limit, target_account):
-    post_text = target_account + "\n\n" + text
+    post_text = target_account + " \n\n" + text
     if len(post_text) > char_limit:
         post_text = post_text[:char_limit]
-    response = api.status_post(status=post_text, spoiler_text="LLM-generated post", language="EN", visibility="direct")
+    response = api.status_post(status=post_text, language="EN", visibility="direct")
     print(f"Posted successfully: {response['url']}")
 
 def post_reply(api, text, char_limit, original_status):
@@ -180,7 +183,7 @@ def post_reply(api, text, char_limit, original_status):
         text = text[:char_limit]
 
     # status_reply prepends mentions for the accounts being replied to and retains the visibility of the previous post automatically.
-    response = api.status_reply(status=text, to_status=original_status, spoiler_text="LLM-generated post", language="EN")
+    response = api.status_reply(status=text, to_status=original_status, language="EN")
 
     print(f"Posted successfully: {response['url']}")
 

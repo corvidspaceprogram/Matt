@@ -7,9 +7,12 @@ def clean_content(content):
     cleaned_content = re.sub(r'@\w+', '', cleaned_content)  # Remove usernames
     #cleaned_content = re.sub(r'[^\w\s.,!?;:]', '', cleaned_content)  # Remove special characters
     #cleaned_content = re.sub(r':\w+:', '', cleaned_content)  # Remove words enclosed with colons
-    cleaned_content.replace("👁️", "") # remove the eye emoji 👁️
-    # if cleaned_content[-1] == "👁️":
-    #     cleaned_content = cleaned_content[:-1]
+
+    return cleaned_content
+
+def clean_content_keep_usernames(content):
+    cleaned_content = re.sub('<[^<]+?>', '', content)  # Remove HTML tags
+    cleaned_content = unescape(cleaned_content)  # Decode HTML entities
 
     return cleaned_content
 
