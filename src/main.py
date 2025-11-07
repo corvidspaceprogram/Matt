@@ -39,6 +39,7 @@ class Stream(StreamListener, LlmPoster):
                     mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)
                 elif self.run_mode == "dev":
                     print(generated_text)
+
                     if self.admin_account is not None:
                         mastodon_client.post_dm(self.mastodon_api, \
                             generated_text, self.char_limit, self.admin_account)

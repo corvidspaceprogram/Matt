@@ -170,6 +170,15 @@ def post_dm(api, text, char_limit, target_account):
     print(f"Posted successfully: {response['url']}")
 
 def post_reply(api, text, char_limit, original_status):
+
+    # If original post is local-only (has an eye emoji) then append eye emoji
+    original_status_content = clean_content(original_status['content'])
+
+    eye_index = original_status_content.find("👁️")
+    if eye_index != -1:
+        text = text + " 👁️"
+
+    # TODO - this would remove the eye
     if len(text) > char_limit:
         text = text[:char_limit]
 

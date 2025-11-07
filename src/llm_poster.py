@@ -87,8 +87,7 @@ class LlmPoster():
                 print(response_json['choices'][0]['message']['content'])
 
         generated_text = text_cleaner.remove_delimiters(\
-            response_json['choices'][0]['message']['content'], "¥", "√") \
-                + " 👁️"
+            response_json['choices'][0]['message']['content'], "¥", "√")
 
         return generated_text
 
