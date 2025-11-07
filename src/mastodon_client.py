@@ -1,5 +1,5 @@
 from mastodon import Mastodon
-from text_cleaner import clean_content_keep_usernames
+from text_cleaner import clean_content, clean_content_keep_usernames
 import json
 
 def init_mastodon(api_base_url, access_token):
