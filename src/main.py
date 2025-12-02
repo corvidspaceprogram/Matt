@@ -7,6 +7,7 @@ import refresh_schedule
 import os
 from datetime import datetime
 import threading
+import time
 
 # Class for responding to mentions
 class Stream(StreamListener, LlmPoster):
@@ -86,6 +87,20 @@ class RandomLlmPoster(LlmPoster):
             # Sleep until next refresh
             refresh_schedule.sleep_until_next_refresh(next_refresh)
 
+# Class to regularly refresh follows
+class FollowsRefresher(LlmPoster):
+    def __init__(self, mastodon_api):
+        LlmPoster.__init__(self, mastodon_api)
+
+    def start_loop(self):
+        if self.run_mode == "dev": print("Starting follower refresh loop")
+
+        while True:
+            mastodon_client.refresh_follows(self.mastodon_api)
+
+            # Sleep 5 minutes
+            time.sleep(300)
+
 # Ignore warnings
 warning_manager.ignore_future_warnings()
 
@@ -98,9 +113,15 @@ mastodon_access_token = env_loader.get_env_variable("MASTODON_ACCESS_TOKEN", "En
 mastodon_api = mastodon_client.init_mastodon(mastodon_base_url, mastodon_access_token)
 
 rlp = RandomLlmPoster(mastodon_api)
-
+flr = FollowsRefresher(mastodon_api)
 
 r = threading.Thread(target=rlp.start_loop)
+f = threading.Thread(target=flr.start_loop)
+
+f.start()
+
+# wait a little bit
+time.sleep(5)
 
 r.start()
 

@@ -156,3 +156,4 @@ cython_debug/
 
 src/*.txt
 src/*.json
+errorlog.txt

@@ -36,7 +36,7 @@ def store_instance_posts(api, max_context_length, clean_func):
         posts = dict()
         max_id=None
         while len(json.dumps(posts)) < max_context_length:
-            batch = api.timeline_local(max_id=max_id)
+            batch = api.timeline_home(max_id=max_id)
             if not batch:
                 break
             for status in batch:
@@ -90,7 +90,7 @@ def update_instance_posts(api, max_context_length, clean_func):
 
         # populate new_posts dictionary until min_id is reached
         while True:
-            batch = api.timeline_local(max_id=max_id, min_id=min_id)
+            batch = api.timeline_home(max_id=max_id, min_id=min_id)
             if not batch:
                 break
             for status in batch:
@@ -187,3 +187,17 @@ def post_reply(api, text, char_limit, original_status):
 
     print(f"Posted successfully: {response['url']}")
 
+# Use regularly to check follows and make sure following is matched.
+def refresh_follows(api):
+
+    # Follow anyone who follows me that I don't follow yet
+    for account in api.account_followers(api.me()):
+        if account not in api.account_following(api.me()):
+            api.account_follow(account)
+
+    # Unfollow anyone I follow who no longer follows me
+    for account in api.account_following(api.me()):
+        if account not in api.account_followers(api.me()):
+            api.account_unfollow(account)
+
+    # Follow is a weird word
