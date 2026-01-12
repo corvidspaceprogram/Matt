@@ -40,7 +40,8 @@ def store_instance_posts(api, max_context_length, clean_func):
             if not batch:
                 break
             for status in batch:
-                if status['account']['username'] != my_username:
+                # Filtering out own posts and boosts/images with no text content
+                if status['account']['username'] != my_username and status["content"] != "":
                     posts.update({status["id"]: clean_func(status["content"])})
             max_id = batch[-1]["id"]
 
@@ -95,7 +96,7 @@ def update_instance_posts(api, max_context_length, clean_func):
                 break
             for status in batch:
                 # Add to empty dictionary
-                if status['account']['username'] != my_username:
+                if status['account']['username'] != my_username and status["content"] != "":
                     new_posts.update(\
                         {status["id"]: clean_func(status["content"])})
 
