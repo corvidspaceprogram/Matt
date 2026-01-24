@@ -4,6 +4,7 @@ import text_cleaner
 import llm_manager
 import os
 import traceback
+import time
 
 class LlmPoster():
     def __init__(self, mastodon_api):
@@ -37,7 +38,7 @@ class LlmPoster():
             self.llm_api_url = env_loader.get_env_variable("LLM_API_URL")
             self.llm_api_key = env_loader.get_env_variable("LLM_API_KEY")
             self.llm_model = env_loader.get_env_variable("LLM_MODEL")
-            self.llm_prompt = env_loader.get_env_variable("LLM_PROMPT")
+            self.system_prompt = env_loader.get_env_variable("SYSTEM_PROMPT")
             
         except:
             self.handle_error()
@@ -55,7 +56,7 @@ class LlmPoster():
                 text_cleaner.clean_content)
         
         mastodon_client.truncate_post_file(self.context_limit, \
-            self.llm_prompt)
+            self.system_prompt)
 
         mastodon_client.convert_instance_posts_txt()
 
@@ -69,17 +70,23 @@ class LlmPoster():
 
         return file_id
 
-    def llm_chat(self, file_id, prompt):
+    def llm_chat(self, messages, file_id=None):
         response_accepted = False
             
         while not response_accepted:
 
-            llm_response = llm_manager.chat_with_file(self.llm_api_url,\
-                self.llm_api_key, self.llm_model, prompt, file_id)
+            if file_id is not None:
+                llm_response = llm_manager.chat_with_file(self.llm_api_url,\
+                    self.llm_api_key, self.llm_model, messages, file_id)
+            else:
+                llm_response = llm_manager.chat_with_model(self.llm_api_url,\
+                    self.llm_api_key, self.llm_model, messages)
 
             if self.run_mode == "dev": print(llm_response)
 
             response_json = llm_response.json()
+            if self.run_mode == "dev":
+                print(response_json)
 
             response_accepted = llm_manager.evaluate_response(response_json['choices'][0]['message']['content'], "¥", "√")
 
@@ -90,6 +97,41 @@ class LlmPoster():
             response_json['choices'][0]['message']['content'], "¥", "√")
 
         return generated_text
+
+    def respond_to_mention(self, mention):
+
+        file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
+
+        while file_id is None:
+            print("No post summary found. Trying again in 30 seconds.")
+            time.sleep(30)
+            file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
+
+        time.sleep(5)
+
+        st = mention['status']
+        message_history = mastodon_client.fetch_context(self.mastodon_api, st)
+        user = st['account']['username']
+
+        messages = [{"role": "system", "content": self.system_prompt}]
+        messages += message_history
+
+        # query += "\n- your post must be in response to the following" + \
+        #     " conversation: \n\n "
+        # query += context
+
+        if self.run_mode == "dev": print(messages)
+
+        generated_text = self.llm_chat(messages, file_id)
+
+        if self.run_mode == "prod":
+            mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)
+        elif self.run_mode == "dev":
+            print(generated_text)
+
+            if self.admin_account is not None:
+                mastodon_client.post_dm(self.mastodon_api, \
+                    generated_text, self.char_limit, self.admin_account)
 
     def handle_error(self):
         msg = traceback.format_exc()

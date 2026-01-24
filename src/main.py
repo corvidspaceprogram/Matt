@@ -1,5 +1,6 @@
 from mastodon import StreamListener
 from llm_poster import LlmPoster
+import llm_manager
 import warning_manager
 import env_loader
 import mastodon_client
@@ -21,29 +22,8 @@ class Stream(StreamListener, LlmPoster):
         if notif['type'] == 'mention': #Check if the content of the notification is a mention
 
             try:
-                st = notif['status']
-                context = mastodon_client.fetch_context(self.mastodon_api, st)
-                user = st['account']['username']
+                self.respond_to_mention(notif)
 
-                query = self.llm_prompt
-                query += "\n- your post must be in response to the following" + \
-                    " conversation: \n\n "
-                query += context
-
-                if self.run_mode == "dev": print(query)
-
-                file_id = self.prepare_context()
-
-                generated_text = self.llm_chat(file_id, query)
-
-                if self.run_mode == "prod":
-                    mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)
-                elif self.run_mode == "dev":
-                    print(generated_text)
-
-                    if self.admin_account is not None:
-                        mastodon_client.post_dm(self.mastodon_api, \
-                            generated_text, self.char_limit, self.admin_account)
             except:
                 self.handle_error()
 
@@ -68,9 +48,22 @@ class RandomLlmPoster(LlmPoster):
                 next_refresh = refresh_schedule.calculate_next_refresh(\
                     current_time, refresh_interval)
 
-                file_id = self.prepare_context()
+                file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
 
-                generated_text = self.llm_chat(file_id, self.llm_prompt)
+                while file_id is None:
+                    print("No post summary found. Trying again in 30 seconds.")
+                    time.sleep(30)
+                    file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
+
+                # This is necessary to allow the text embedding model enough time to load before the embeddings are needed. 
+                time.sleep(5)
+
+                messages = [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": "Write a message for the platform, picking a topic from the attached context."}
+                ]
+
+                generated_text = self.llm_chat(messages, file_id=file_id)
 
                 if self.run_mode == "prod":
                     mastodon_client.post_public(self.mastodon_api, generated_text,\
@@ -87,6 +80,48 @@ class RandomLlmPoster(LlmPoster):
             # Sleep until next refresh
             refresh_schedule.sleep_until_next_refresh(next_refresh)
 
+class PostsSummaryRefresher(LlmPoster):
+    def __init__(self, mastodon_api):
+        LlmPoster.__init__(self, mastodon_api)
+        self.llm_model = 'google/gemma-3-1b'
+
+    def start_loop(self):
+        if self.run_mode == "dev": print("Starting context refresh loop")
+
+        while True:
+
+            # First delete existing summary file (this blocks any other requests)
+            llm_manager.delete_files(self.llm_api_url, \
+                self.llm_api_key, 'posts_summary.txt')
+
+            file_id = self.prepare_context()
+
+            time.sleep(5)
+
+            messages = [
+                {"role": "user", 
+                "content": "Summarize the main topics and themes discussed in the attached file."}]
+
+            llm_response = llm_manager.chat_with_file(self.llm_api_url,\
+                    self.llm_api_key, self.llm_model, messages, file_id)
+
+            response_json = llm_response.json()
+            if self.run_mode == "dev":
+                print(response_json)
+
+            generated_text = response_json['choices'][0]['message']['content']
+
+            #generated_text = self.llm_chat(messages, file_id=file_id)
+
+            with open('posts_summary.txt', 'w', encoding='utf-8') as f:
+                f.write(generated_text)
+
+            llm_manager.upload_file(self.llm_api_url, self.llm_api_key, 'posts_summary.txt')
+
+            # Wait for an hour
+            time.sleep(3600)
+
+
 # Class to regularly refresh follows
 class FollowsRefresher(LlmPoster):
     def __init__(self, mastodon_api):
@@ -101,6 +136,41 @@ class FollowsRefresher(LlmPoster):
             # Sleep 5 minutes
             time.sleep(300)
 
+class FallbackNotificationCheck(LlmPoster):
+    def __init__(self, mastodon_api):
+        LlmPoster.__init__(self, mastodon_api)
+
+    def start_loop(self):
+        if self.run_mode == "dev": print("Mastodon API streaming failed, began fallback notification loop")
+
+        latest_mention_id = mastodon_client.fetch_latest_mention(self.mastodon_api)['status']['id']
+
+        if self.run_mode == "dev": print("Latest mention: " + latest_mention_id)
+
+        while True:
+            mentions = mastodon_client.fetch_new_mentions(self.mastodon_api, latest_mention_id) 
+
+            if mentions:
+                if self.run_mode == "dev":
+                    print("New mentions found!")
+
+                for mention in mentions:
+                    if self.run_mode == "dev":
+                        print(mention['status']['content'])
+
+                    try:
+                        self.respond_to_mention(mention)
+                    except:
+                        self.handle_error()
+
+                    if mention['status']['id'] > latest_mention_id:
+                        latest_mention_id = mention['status']['id']
+
+            # I want this to be reasonably responsive so wait only 10 seconds.
+            time.sleep(10)
+
+
+
 # Ignore warnings
 warning_manager.ignore_future_warnings()
 
@@ -111,6 +181,12 @@ env_loader.load_environment_variables()
 mastodon_base_url = env_loader.get_env_variable("MASTODON_BASE_URL", "Enter your Mastodon base URL: ")
 mastodon_access_token = env_loader.get_env_variable("MASTODON_ACCESS_TOKEN", "Enter your Mastodon access token: ")
 mastodon_api = mastodon_client.init_mastodon(mastodon_base_url, mastodon_access_token)
+
+psr = PostsSummaryRefresher(mastodon_api)
+
+p = threading.Thread(target=psr.start_loop)
+
+p.start()
 
 rlp = RandomLlmPoster(mastodon_api)
 flr = FollowsRefresher(mastodon_api)
@@ -125,7 +201,17 @@ time.sleep(5)
 
 r.start()
 
-mastodon_api.stream_user(Stream(mastodon_api)) #Launch stream
+try:
+    # Listen for notifications using streaming API
+    mastodon_api.stream_user(Stream(mastodon_api)) #Launch stream
+except:
+
+    # streaming API fails, start fallback
+    fnc = FallbackNotificationCheck(mastodon_api)
+
+    n = threading.Thread(target=fnc.start_loop)
+
+    n.start()
 
 # TODO - move updating context file and updating file into a separate script file, so it can be called on notification as well. 
 

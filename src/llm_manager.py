@@ -9,33 +9,29 @@ def upload_file(url, api_key, file_path):
     response = requests.post(url + "v1/files/", headers=headers, files=files)
     return response.json()
 
-def chat_with_file(url, api_key, model, query, file_id):
+def chat_with_file(url, api_key, model, messages, file_id):
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
     payload = {
         'model': model,
-        'messages': [{'role': 'user', 'content': query}],
+        'messages': messages,
         'files': [{'type': 'file', 'id': file_id}]
     }
+    print(payload)
     response = requests.post(url + "chat/completions", headers=headers, json=payload)
     return response
     #return response.json()
 
-def chat_with_model(url, api_key, model, query):
+def chat_with_model(url, api_key, model, messages):
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
     data = {
       "model": model,
-      "messages": [
-        {
-          "role": "user",
-          "content": query
-        }
-      ]
+      "messages": messages
     }
     response = requests.post(url + "chat/completions", headers=headers, json=data)
     return response
@@ -55,6 +51,21 @@ def delete_files(url, api_key, file_name):
             requests.delete(url + 'v1/files/' + file['id'], headers=headers)
             
     return
+
+# Obtains id for first file with given name
+def get_file_id(url, api_key, file_name):
+    # TODO - error handling for HTML error responses.
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Accept': 'application/json'
+    }
+    files_list = requests.get(url + 'v1/files/', headers=headers)
+
+    for file in files_list.json():
+        if file['filename'] == file_name:
+            return file['id']
+            
+    return None
 
 def evaluate_response(text, opening_char, closing_char):
     accepted = False

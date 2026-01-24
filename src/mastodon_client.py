@@ -41,7 +41,7 @@ def store_instance_posts(api, max_context_length, clean_func):
                 break
             for status in batch:
                 # Filtering out own posts and boosts/images with no text content
-                if status['account']['username'] != my_username and status["content"] != "":
+                if status['account']['username'] != my_username and status["content"] != "" and status['visibility'] != 'direct':
                     posts.update({status["id"]: clean_func(status["content"])})
             max_id = batch[-1]["id"]
 
@@ -96,7 +96,7 @@ def update_instance_posts(api, max_context_length, clean_func):
                 break
             for status in batch:
                 # Add to empty dictionary
-                if status['account']['username'] != my_username and status["content"] != "":
+                if status['account']['username'] != my_username and status["content"] != "" and status['visibility'] != 'direct':
                     new_posts.update(\
                         {status["id"]: clean_func(status["content"])})
 
@@ -145,17 +145,38 @@ def truncate_post_file(max_context_length, prompt):
 def fetch_context(api, status):
     full_context = api.status_context(status['id'])
 
-    out = ""
+    message_history = []
 
     for ancestor in full_context['ancestors']:
-        out += "@" + ancestor['account']['username'] + ": "
-        out += "\"" + clean_content_keep_usernames(\
-            ancestor['content']) + "\"\n "
+        if ancestor['account']['id']==api.me()['id']:
+            message_role = "assistant"
+            message_content = ""
+        else:
+            message_role = "user"
+            message_content = "[Posted by @" + ancestor['account']['username'] + "] "
+        
+        message_content += clean_content_keep_usernames(ancestor['content'])
 
-    out += "@" + status['account']['username'] + ": "
-    out += "\"" + clean_content_keep_usernames(status['content']) + "\""
+        message_history.append({
+            "role": message_role,
+            "content": message_content
+        })
 
-    return(out)
+    if status['account']==api.me():
+        message_role = "assistant"
+        message_content = "" 
+    else:
+        message_role = "user"
+        message_content = "[Posted by @" + status['account']['username'] + "] "
+
+    message_content += clean_content_keep_usernames(status['content'])
+
+    message_history.append({
+        "role": message_role,
+        "content": message_content
+    })
+
+    return(message_history)
 
 def post_public(api, text, char_limit):
     if len(text) > char_limit:
@@ -202,3 +223,46 @@ def refresh_follows(api):
             api.account_unfollow(account)
 
     # Follow is a weird word
+
+def fetch_latest_mention(api):
+    try:
+        max_id = None
+        while True:
+            batch = api.notifications(max_id=max_id)
+            if not batch:
+                break
+            for notif in batch:
+                # Return first mention we come across
+                if notif['type'] == 'mention':
+                    return notif
+
+            # No mentions found so grab a new batch
+            max_id = batch[-1]["id"]
+
+    except Exception as e:
+        print(f"Error fetching notifications: {e}")
+        return []
+
+def fetch_new_mentions(api, min_id):
+    try:
+        mentions = []
+        max_id = None
+        while True:
+            batch = api.notifications(max_id=max_id)
+            if not batch:
+                return mentions
+
+            for notif in batch:
+                if notif['type'] == 'mention':
+                    if notif['status']['id'] <= min_id:
+                        return mentions
+                    else:
+                        mentions.append(notif)
+
+            # No new mentions found so grab a new batch until min_id
+            max_id = batch[-1]["id"]
+
+    except Exception as e:
+        print(f"Error fetching notifications: {e}")
+        return []
+
