@@ -158,5 +158,5 @@ src/*.txt
 src/*.json
 errorlog.txt
 
-src/test_reply.py
-src/test_stream.py
+src/test_*
+test_*
