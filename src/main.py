@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 import threading
 import time
+from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
 
 # Class for responding to mentions
 class Stream(StreamListener, LlmPoster):
@@ -24,8 +25,11 @@ class Stream(StreamListener, LlmPoster):
             try:
                 self.respond_to_mention(notif)
 
-            except:
+            except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                 self.handle_error()
+            except KeyboardInterrupt:
+                print("\nShutting down gracefully...")
+                raise
 
 # Class for random posts
 class RandomLlmPoster(LlmPoster):
@@ -74,8 +78,11 @@ class RandomLlmPoster(LlmPoster):
                         mastodon_client.post_dm(self.mastodon_api, \
                             generated_text, self.char_limit, self.admin_account)
 
-            except:
+            except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                 self.handle_error()
+            except KeyboardInterrupt:
+                print("\nShutting down gracefully...")
+                raise
 
             # Sleep until next refresh
             refresh_schedule.sleep_until_next_refresh(next_refresh)
@@ -160,8 +167,11 @@ class FallbackNotificationCheck(LlmPoster):
 
                     try:
                         self.respond_to_mention(mention)
-                    except:
+                    except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                         self.handle_error()
+                    except KeyboardInterrupt:
+                        print("\nShutting down gracefully...")
+                        raise
 
                     if mention['status']['id'] > latest_mention_id:
                         latest_mention_id = mention['status']['id']
@@ -204,14 +214,17 @@ r.start()
 try:
     # Listen for notifications using streaming API
     mastodon_api.stream_user(Stream(mastodon_api)) #Launch stream
-except:
-
+except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ConnectionError, TimeoutError) as e:
+    print(f"Streaming API failed: {e}")
     # streaming API fails, start fallback
     fnc = FallbackNotificationCheck(mastodon_api)
 
     n = threading.Thread(target=fnc.start_loop)
 
     n.start()
+except KeyboardInterrupt:
+    print("\nShutting down gracefully...")
+    raise
 
 # TODO - move updating context file and updating file into a separate script file, so it can be called on notification as well. 
 

@@ -5,6 +5,7 @@ import llm_manager
 import os
 import traceback
 import time
+from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
 
 class LlmPoster():
     def __init__(self, mastodon_api):
@@ -40,8 +41,9 @@ class LlmPoster():
             self.llm_model = env_loader.get_env_variable("LLM_MODEL")
             self.system_prompt = env_loader.get_env_variable("SYSTEM_PROMPT")
             
-        except:
+        except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ValueError) as e:
             self.handle_error()
+            raise
 
     def prepare_context(self):
         if os.path.exists('posts.json'):
