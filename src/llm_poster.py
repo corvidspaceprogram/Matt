@@ -90,13 +90,18 @@ class LlmPoster():
             if self.run_mode == "dev":
                 print(response_json)
 
-            response_accepted = llm_manager.evaluate_response(response_json['choices'][0]['message']['content'], "¥", "√")
+            try: 
+                generated_text = llm_manager.evaluate_response(response_json['choices'][0]['message']['content'])
+
+                response_accepted = True
+            except:
+                if self.run_mode == "dev": 
+                    print("Response does not contain valid post format: \n\n" + response_json['choices'][0]['message']['content'] + "\n")
+                # Try again
+                continue
 
             if self.run_mode == "dev":
                 print(response_json['choices'][0]['message']['content'])
-
-        generated_text = text_cleaner.remove_delimiters(\
-            response_json['choices'][0]['message']['content'], "¥", "√")
 
         return generated_text
 

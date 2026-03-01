@@ -127,26 +127,26 @@ def get_file_id(url, api_key, file_name):
             
     return None
 
-def evaluate_response(text, opening_char, closing_char):
-    accepted = False
+def evaluate_response(text):
+    """ 
+    We're expecting the text to contain a JSON object in the format
+    { 
+        "post_content": "CONTENT"
+    }
 
-    openings = text.count(opening_char)
-    closings = text.count(closing_char)
+    To evaluate, we search for "{" then find the next "}". Then parse this
+    using JSON library. 
 
-    # Check the number of opening/closing characters - want exactly 1 of each
-    if openings != 1 or closings != 1:
-        print("LLM output failed evaluation! Needs exactly one " + opening_char + closing_char + " pair.")
-        return accepted
-    
-    # Check length of substring between characters. Want more than half of total length
-    start_index = text.find(opening_char)
-    end_index = text.find(closing_char)
-    sub_length = end_index - (start_index + 1)
+    Any errors thrown during this (i.e. incorrect json format, no
+    "post_context" name) should be caught outside this function. 
 
-    if sub_length < len(text)/2:
-        print("LLM output failed evaluation! Text between " + opening_char + closing_char + " not long enough.")
-        return accepted
+    """    
+    start_index = text.find("{")
+    end_index = text[start_index:].find("}") + start_index
 
-    accepted = True
+    # sub_length = end_index - (start_index + 1)
+    post_json = json.loads(text[start_index:end_index+1])
 
-    return accepted
+    post_content = post_json["post_content"]
+
+    return post_content

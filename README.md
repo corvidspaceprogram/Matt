@@ -11,14 +11,14 @@ Forked and substantially altered from [mastodon-markov](https://github.com/ewanc
 2. (Optional) Create and activate a virtual environment for the dependencies: 
 
    ```bash
-   python -m venv venv
+   python3 -m venv venv
    source venv/bin/activate
    ```
 
 3. Install the required dependencies by running:
 
    ```bash
-   pip install requests mastodon.py python-dotenv
+   pip install requests mastodon.py python-dotenv html_text
    ```
 
 4. Create a `.env` file and add the following variables:
