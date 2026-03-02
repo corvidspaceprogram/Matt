@@ -5,6 +5,7 @@ import warning_manager
 import env_loader
 import mastodon_client
 import refresh_schedule
+from startup_validator import validate_all
 import os
 from datetime import datetime
 import threading
@@ -109,14 +110,11 @@ class PostsSummaryRefresher(LlmPoster):
                 {"role": "user", 
                 "content": "Summarize the main topics and themes discussed in the attached file."}]
 
-            llm_response = llm_manager.chat_with_file(self.llm_api_url,\
-                    self.llm_api_key, self.llm_model, messages, file_id)
+            generated_text = llm_manager.chat_with_file_validated(
+                self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
 
-            response_json = llm_response.json()
             if self.run_mode == "dev":
-                print(response_json)
-
-            generated_text = response_json['choices'][0]['message']['content']
+                print(generated_text)
 
             #generated_text = self.llm_chat(messages, file_id=file_id)
 
@@ -186,6 +184,9 @@ warning_manager.ignore_future_warnings()
 
 # Load environment variables
 env_loader.load_environment_variables()
+
+# Validate all configuration at startup
+validate_all()
 
 # Source Mastodon API - can't change this, as we do need an account to interact with the API
 mastodon_base_url = env_loader.get_env_variable("MASTODON_BASE_URL", "Enter your Mastodon base URL: ")

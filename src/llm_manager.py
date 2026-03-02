@@ -2,6 +2,7 @@ import requests
 import json
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError
 from retry_utils import retry_with_backoff
+from validation_utils import validate_llm_response, validate_file_upload_response, validate_json_response
 
 @retry_with_backoff()
 def upload_file(url, api_key, file_path):
@@ -156,3 +157,20 @@ def evaluate_response(text):
     post_content = post_json["post_content"]
 
     return post_content
+
+
+def chat_with_model_validated(url, api_key, model, messages):
+    response = chat_with_model(url, api_key, model, messages)
+    response_json = validate_json_response(response.text, " in chat_with_model")
+    return validate_llm_response(response_json)
+
+
+def chat_with_file_validated(url, api_key, model, messages, file_id):
+    response = chat_with_file(url, api_key, model, messages, file_id)
+    response_json = validate_json_response(response.text, " in chat_with_file")
+    return validate_llm_response(response_json)
+
+
+def upload_file_validated(url, api_key, file_path):
+    response = upload_file(url, api_key, file_path)
+    return validate_file_upload_response(response, f" uploading {file_path}")

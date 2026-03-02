@@ -2,6 +2,7 @@ import env_loader
 import mastodon_client
 import text_cleaner
 import llm_manager
+import validation_utils
 import os
 import sys
 import json
@@ -81,30 +82,26 @@ class LlmPoster():
         while not response_accepted:
 
             if file_id is not None:
-                llm_response = llm_manager.chat_with_file(self.llm_api_url,\
-                    self.llm_api_key, self.llm_model, messages, file_id)
+                content = llm_manager.chat_with_file_validated(
+                    self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
             else:
-                llm_response = llm_manager.chat_with_model(self.llm_api_url,\
-                    self.llm_api_key, self.llm_model, messages)
+                content = llm_manager.chat_with_model_validated(
+                    self.llm_api_url, self.llm_api_key, self.llm_model, messages)
 
-            if self.run_mode == "dev": print(llm_response)
-
-            response_json = llm_response.json()
-            if self.run_mode == "dev":
-                print(response_json)
+            if self.run_mode == "dev": 
+                print(content)
 
             try: 
-                generated_text = llm_manager.evaluate_response(response_json['choices'][0]['message']['content'])
+                generated_text = llm_manager.evaluate_response(content)
 
                 response_accepted = True
             except (json.JSONDecodeError, KeyError, ValueError):
                 if self.run_mode == "dev": 
-                    print("Response does not contain valid post format: \n\n" + response_json['choices'][0]['message']['content'] + "\n")
-                # Try again
+                    print("Response does not contain valid post format: \n\n" + content + "\n")
                 continue
 
             if self.run_mode == "dev":
-                print(response_json['choices'][0]['message']['content'])
+                print(content)
 
         return generated_text
 
