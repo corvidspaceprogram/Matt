@@ -3,6 +3,7 @@ import mastodon_client
 import text_cleaner
 import llm_manager
 import os
+import json
 import traceback
 import time
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
@@ -94,7 +95,7 @@ class LlmPoster():
                 generated_text = llm_manager.evaluate_response(response_json['choices'][0]['message']['content'])
 
                 response_accepted = True
-            except:
+            except (json.JSONDecodeError, KeyError, ValueError):
                 if self.run_mode == "dev": 
                     print("Response does not contain valid post format: \n\n" + response_json['choices'][0]['message']['content'] + "\n")
                 # Try again

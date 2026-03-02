@@ -1,7 +1,9 @@
 import requests
 import json
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError
+from retry_utils import retry_with_backoff
 
+@retry_with_backoff()
 def upload_file(url, api_key, file_path):
     try:
         headers = {
@@ -28,6 +30,7 @@ def upload_file(url, api_key, file_path):
     except Exception as e:
         raise NetworkError(f"Unexpected error uploading file {file_path}: {e}")
 
+@retry_with_backoff()
 def chat_with_file(url, api_key, model, messages, file_id):
     try:
         headers = {
@@ -52,6 +55,7 @@ def chat_with_file(url, api_key, model, messages, file_id):
     except Exception as e:
         raise NetworkError(f"Unexpected error in LLM chat with file {file_id}: {e}")
 
+@retry_with_backoff()
 def chat_with_model(url, api_key, model, messages):
     try:
         headers = {
@@ -75,6 +79,7 @@ def chat_with_model(url, api_key, model, messages):
         raise NetworkError(f"Unexpected error in LLM chat: {e}")
 
 # Deletes all files called "file_name"
+@retry_with_backoff()
 def delete_files(url, api_key, file_name):
     try:
         headers = {
@@ -101,6 +106,7 @@ def delete_files(url, api_key, file_name):
         raise NetworkError(f"Unexpected error deleting files {file_name}: {e}")
 
 # Obtains id for first file with given name
+@retry_with_backoff()
 def get_file_id(url, api_key, file_name):
     try:
         headers = {
