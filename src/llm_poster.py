@@ -2,9 +2,14 @@ import env_loader
 import mastodon_client
 import text_cleaner
 import llm_manager
+import validation_utils
 import os
+import sys
+import json
 import traceback
 import time
+from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
+from datetime import datetime
 
 class LlmPoster():
     def __init__(self, mastodon_api):
@@ -40,8 +45,9 @@ class LlmPoster():
             self.llm_model = env_loader.get_env_variable("LLM_MODEL")
             self.system_prompt = env_loader.get_env_variable("SYSTEM_PROMPT")
             
-        except:
+        except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ValueError) as e:
             self.handle_error()
+            raise
 
     def prepare_context(self):
         if os.path.exists('posts.json'):
@@ -76,25 +82,26 @@ class LlmPoster():
         while not response_accepted:
 
             if file_id is not None:
-                llm_response = llm_manager.chat_with_file(self.llm_api_url,\
-                    self.llm_api_key, self.llm_model, messages, file_id)
+                content = llm_manager.chat_with_file_validated(
+                    self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
             else:
-                llm_response = llm_manager.chat_with_model(self.llm_api_url,\
-                    self.llm_api_key, self.llm_model, messages)
+                content = llm_manager.chat_with_model_validated(
+                    self.llm_api_url, self.llm_api_key, self.llm_model, messages)
 
-            if self.run_mode == "dev": print(llm_response)
+            if self.run_mode == "dev": 
+                print(content)
 
-            response_json = llm_response.json()
+            try: 
+                generated_text = llm_manager.evaluate_response(content)
+
+                response_accepted = True
+            except (json.JSONDecodeError, KeyError, ValueError):
+                if self.run_mode == "dev": 
+                    print("Response does not contain valid post format: \n\n" + content + "\n")
+                continue
+
             if self.run_mode == "dev":
-                print(response_json)
-
-            response_accepted = llm_manager.evaluate_response(response_json['choices'][0]['message']['content'], "¥", "√")
-
-            if self.run_mode == "dev":
-                print(response_json['choices'][0]['message']['content'])
-
-        generated_text = text_cleaner.remove_delimiters(\
-            response_json['choices'][0]['message']['content'], "¥", "√")
+                print(content)
 
         return generated_text
 
@@ -133,17 +140,40 @@ class LlmPoster():
                 mastodon_client.post_dm(self.mastodon_api, \
                     generated_text, self.char_limit, self.admin_account)
 
-    def handle_error(self):
-        msg = traceback.format_exc()
+    def handle_error(self, context=""):
+        """
+        Handle errors with enhanced error messages and logging.
+        
+        Args:
+            context: Optional context string describing where error occurred
+        """
+        error = sys.exc_info()[1]
+        error_type = type(error).__name__
+        timestamp = datetime.now().isoformat()
+        
+        # Build error message
+        context_str = f" in {context}" if context else ""
+        error_msg = f"[{error_type}]{context_str}: {str(error)}"
+        
+        # Full log entry with timestamp
+        full_msg = traceback.format_exc()
+        log_entry = f"{timestamp} - {error_type}{context_str}: {str(error)}\n{full_msg}\n"
+        
         if self.run_mode == "dev":
             print(" > ERROR:")
-            print(msg)
+            print(error_msg)
+            print(full_msg)
 
+        # Log to file with timestamp
         with open('errorlog.txt', "a") as f:
-            f.write(msg)
+            f.write(log_entry)
 
-        # DM admin account that something went wrong.
+        # DM admin account with cleaner error message
         if self.admin_account is not None:
-            mastodon_client.post_dm(self.mastodon_api, \
-                "Something went wrong: " + msg, self.char_limit, \
-                self.admin_account)
+            admin_msg = f"Error: {error_type}{context_str}\n{str(error)[:200]}"
+            try:
+                mastodon_client.post_dm(self.mastodon_api, \
+                    admin_msg, self.char_limit, \
+                    self.admin_account)
+            except:
+                pass  # Don't fail if admin notification fails
