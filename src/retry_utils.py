@@ -16,8 +16,8 @@ def retry_with_backoff(max_retries=None, initial_delay=None, max_delay=None):
     Retry decorator with exponential backoff for network operations.
     
     Args:
-        max_retries: Maximum number of retry attempts (default: from env or 3)
-        initial_delay: Initial delay in seconds (default: from env or 1)
+        max_retries: Maximum number of retry attempts (default: from env or 5)
+        initial_delay: Initial delay in seconds (default: from env or 10)
         max_delay: Maximum delay in seconds (default: from env or 60)
     
     The decorator catches NetworkError exceptions and retries with exponential
@@ -30,11 +30,11 @@ def retry_with_backoff(max_retries=None, initial_delay=None, max_delay=None):
     """
     # Use environment variables if not specified
     if max_retries is None:
-        max_retries = int(os.getenv('MAX_RETRIES', '3'))
+        max_retries = int(os.getenv('MAX_RETRIES', '5'))
     if initial_delay is None:
-        initial_delay = float(os.getenv('RETRY_INITIAL_DELAY', '1'))
+        initial_delay = float(os.getenv('RETRY_INITIAL_DELAY', '10'))
     if max_delay is None:
-        max_delay = float(os.getenv('RETRY_MAX_DELAY', '60'))
+        max_delay = float(os.getenv('RETRY_MAX_DELAY', '300'))
     
     def decorator(func):
         @functools.wraps(func)
@@ -86,11 +86,11 @@ def retry_on_exception(exception_types=None, max_retries=None, initial_delay=Non
     
     # Use environment variables if not specified
     if max_retries is None:
-        max_retries = int(os.getenv('MAX_RETRIES', '3'))
+        max_retries = int(os.getenv('MAX_RETRIES', '5'))
     if initial_delay is None:
-        initial_delay = float(os.getenv('RETRY_INITIAL_DELAY', '1'))
+        initial_delay = float(os.getenv('RETRY_INITIAL_DELAY', '10'))
     if max_delay is None:
-        max_delay = float(os.getenv('RETRY_MAX_DELAY', '60'))
+        max_delay = float(os.getenv('RETRY_MAX_DELAY', '300'))
     
     def decorator(func):
         @functools.wraps(func)

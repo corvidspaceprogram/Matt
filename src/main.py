@@ -1,4 +1,5 @@
 from mastodon import StreamListener
+from mastodon.errors import MastodonMalformedEventError
 from llm_poster import LlmPoster
 import llm_manager
 import warning_manager
@@ -65,7 +66,7 @@ class RandomLlmPoster(LlmPoster):
 
                 messages = [
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": "Write a message for the platform, picking a topic from the attached context."}
+                    {"role": "user", "content": "Write a message for the platform, picking one topic from the attached context."}
                 ]
 
                 generated_text = self.llm_chat(messages, file_id=file_id)
@@ -89,9 +90,9 @@ class RandomLlmPoster(LlmPoster):
             refresh_schedule.sleep_until_next_refresh(next_refresh)
 
 class PostsSummaryRefresher(LlmPoster):
-    def __init__(self, mastodon_api):
+    def __init__(self, mastodon_api, summary_model):
         LlmPoster.__init__(self, mastodon_api)
-        self.llm_model = 'google/gemma-3-1b'
+        self.llm_model = summary_model
 
     def start_loop(self):
         if self.run_mode == "dev": print("Starting context refresh loop")
@@ -104,7 +105,7 @@ class PostsSummaryRefresher(LlmPoster):
 
             file_id = self.prepare_context()
 
-            time.sleep(5)
+            time.sleep(30)
 
             messages = [
                 {"role": "user", 
@@ -193,7 +194,9 @@ mastodon_base_url = env_loader.get_env_variable("MASTODON_BASE_URL", "Enter your
 mastodon_access_token = env_loader.get_env_variable("MASTODON_ACCESS_TOKEN", "Enter your Mastodon access token: ")
 mastodon_api = mastodon_client.init_mastodon(mastodon_base_url, mastodon_access_token)
 
-psr = PostsSummaryRefresher(mastodon_api)
+summary_model = env_loader.get_env_variable("SUMMARY_MODEL", "Enter the summary model: ")
+
+psr = PostsSummaryRefresher(mastodon_api, summary_model)
 
 p = threading.Thread(target=psr.start_loop)
 
@@ -215,7 +218,7 @@ r.start()
 try:
     # Listen for notifications using streaming API
     mastodon_api.stream_user(Stream(mastodon_api)) #Launch stream
-except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ConnectionError, TimeoutError) as e:
+except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ConnectionError, TimeoutError, MastodonMalformedEventError) as e:
     print(f"Streaming API failed: {e}")
     # streaming API fails, start fallback
     fnc = FallbackNotificationCheck(mastodon_api)
