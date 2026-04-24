@@ -121,6 +121,11 @@ class LlmPoster():
         user = st['account']['username']
 
         messages = [{"role": "system", "content": self.system_prompt}]
+
+        # Include a blank message from the user if first post in chain is by assistant. Avoids 400 error for malformed request.
+        if message_history[0]["role"] == "assistant":
+            messages += [{"role": "user", "content": "Write a message for the platform, picking one topic from the attached context."}]
+
         messages += message_history
 
         # query += "\n- your post must be in response to the following" + \
