@@ -49,10 +49,21 @@ class RandomLlmPoster(LlmPoster):
             Handle these errors in the try/catch block here.
             """
             try:
+                # Read next refresh from file
+                next_refresh = refresh_schedule.read_refresh_from_file("next_post_time.txt")
+
+                # Sleep until next refresh
+                if next_refresh is not None:
+                    refresh_schedule.sleep_until_next_refresh(next_refresh)
+
+                # Schedule next refresh
                 current_time = datetime.now()
                 refresh_interval = refresh_schedule.calculate_refresh_interval()
                 next_refresh = refresh_schedule.calculate_next_refresh(\
                     current_time, refresh_interval)
+
+                # Write to file
+                refresh_schedule.write_refresh_to_file(next_refresh, "next_post_time.txt")
 
                 file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
 
@@ -85,9 +96,6 @@ class RandomLlmPoster(LlmPoster):
             except KeyboardInterrupt:
                 print("\nShutting down gracefully...")
                 raise
-
-            # Sleep until next refresh
-            refresh_schedule.sleep_until_next_refresh(next_refresh)
 
 class PostsSummaryRefresher(LlmPoster):
     def __init__(self, mastodon_api, summary_model):
