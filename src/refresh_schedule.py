@@ -18,7 +18,7 @@ def sleep_until_next_refresh(next_refresh):
         hours = time_remaining.seconds // 3600
         minutes = (time_remaining.seconds % 3600) // 60
         seconds = time_remaining.seconds % 60
-        print(f"Time until next refresh: {days}d {hours}h {minutes}m {seconds}s")
+        print(f"Time until next refresh: {days}d {hours}h {minutes}m {seconds}s", flush=True)
         time.sleep(time_remaining.total_seconds())
 
 def read_refresh_from_file(file_path):

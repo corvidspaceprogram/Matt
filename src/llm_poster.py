@@ -89,7 +89,7 @@ class LlmPoster():
                     self.llm_api_url, self.llm_api_key, self.llm_model, messages)
 
             if self.run_mode == "dev": 
-                print(content)
+                print(content, flush=True)
 
             try: 
                 generated_text = llm_manager.evaluate_response(content)
@@ -97,11 +97,11 @@ class LlmPoster():
                 response_accepted = True
             except (json.JSONDecodeError, KeyError, ValueError):
                 if self.run_mode == "dev": 
-                    print("Response does not contain valid post format: \n\n" + content + "\n")
+                    print("Response does not contain valid post format: \n\n" + content + "\n", flush=True)
                 continue
 
             if self.run_mode == "dev":
-                print(content)
+                print(content, flush=True)
 
         return generated_text
 
@@ -110,7 +110,7 @@ class LlmPoster():
         file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
 
         while file_id is None:
-            print("No post summary found. Trying again in 30 seconds.")
+            print("No post summary found. Trying again in 30 seconds.", flush=True)
             time.sleep(30)
             file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
 
@@ -132,14 +132,14 @@ class LlmPoster():
         #     " conversation: \n\n "
         # query += context
 
-        if self.run_mode == "dev": print(messages)
+        if self.run_mode == "dev": print(messages, flush=True)
 
         generated_text = self.llm_chat(messages, file_id)
 
         if self.run_mode == "prod":
             mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)
         elif self.run_mode == "dev":
-            print(generated_text)
+            print(generated_text, flush=True)
 
             if self.admin_account is not None:
                 mastodon_client.post_dm(self.mastodon_api, \
@@ -165,9 +165,9 @@ class LlmPoster():
         log_entry = f"{timestamp} - {error_type}{context_str}: {str(error)}\n{full_msg}\n"
         
         if self.run_mode == "dev":
-            print(" > ERROR:")
-            print(error_msg)
-            print(full_msg)
+            print(" > ERROR:", flush=True)
+            print(error_msg, flush=True)
+            print(full_msg, flush=True)
 
         # Log to file with timestamp
         with open('errorlog.txt', "a") as f:

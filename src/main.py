@@ -19,7 +19,7 @@ class Stream(StreamListener, LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
         StreamListener.__init__(self)
 
-        if self.run_mode == "dev": print("Initializing notification listener")
+        if self.run_mode == "dev": print("Initializing notification listener", flush=True)
 
     def on_notification(self,notif): #Called when a notification comes
         if notif['type'] == 'mention': #Check if the content of the notification is a mention
@@ -30,7 +30,7 @@ class Stream(StreamListener, LlmPoster):
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                 self.handle_error()
             except KeyboardInterrupt:
-                print("\nShutting down gracefully...")
+                print("\nShutting down gracefully...", flush=True)
                 raise
 
 # Class for random posts
@@ -39,7 +39,7 @@ class RandomLlmPoster(LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Starting random post schedule loop.")
+        if self.run_mode == "dev": print("Starting random post schedule loop.", flush=True)
 
         while True:
             """
@@ -68,7 +68,7 @@ class RandomLlmPoster(LlmPoster):
                 file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
 
                 while file_id is None:
-                    print("No post summary found. Trying again in 30 seconds.")
+                    print("No post summary found. Trying again in 30 seconds.", flush=True)
                     time.sleep(30)
                     file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
 
@@ -86,7 +86,7 @@ class RandomLlmPoster(LlmPoster):
                     mastodon_client.post_public(self.mastodon_api, generated_text,\
                         self.char_limit)
                 elif self.run_mode == "dev":
-                    print(generated_text)
+                    print(generated_text, flush=True)
                     if self.admin_account is not None:
                         mastodon_client.post_dm(self.mastodon_api, \
                             generated_text, self.char_limit, self.admin_account)
@@ -94,7 +94,7 @@ class RandomLlmPoster(LlmPoster):
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                 self.handle_error()
             except KeyboardInterrupt:
-                print("\nShutting down gracefully...")
+                print("\nShutting down gracefully...", flush=True)
                 raise
 
 class PostsSummaryRefresher(LlmPoster):
@@ -103,7 +103,7 @@ class PostsSummaryRefresher(LlmPoster):
         self.llm_model = summary_model
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Starting context refresh loop")
+        if self.run_mode == "dev": print("Starting context refresh loop", flush=True)
 
         while True:
 
@@ -123,7 +123,7 @@ class PostsSummaryRefresher(LlmPoster):
                 self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
 
             if self.run_mode == "dev":
-                print(generated_text)
+                print(generated_text, flush=True)
 
             #generated_text = self.llm_chat(messages, file_id=file_id)
 
@@ -142,7 +142,7 @@ class FollowsRefresher(LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Starting follower refresh loop")
+        if self.run_mode == "dev": print("Starting follower refresh loop", flush=True)
 
         while True:
             mastodon_client.refresh_follows(self.mastodon_api)
@@ -155,29 +155,29 @@ class FallbackNotificationCheck(LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Mastodon API streaming failed, began fallback notification loop")
+        if self.run_mode == "dev": print("Mastodon API streaming failed, began fallback notification loop", flush=True)
 
         latest_mention_id = mastodon_client.fetch_latest_mention(self.mastodon_api)['status']['id']
 
-        if self.run_mode == "dev": print("Latest mention: " + latest_mention_id)
+        if self.run_mode == "dev": print("Latest mention: " + latest_mention_id, flush=True)
 
         while True:
             mentions = mastodon_client.fetch_new_mentions(self.mastodon_api, latest_mention_id) 
 
             if mentions:
                 if self.run_mode == "dev":
-                    print("New mentions found!")
+                    print("New mentions found!", flush=True)
 
                 for mention in mentions:
                     if self.run_mode == "dev":
-                        print(mention['status']['content'])
+                        print(mention['status']['content'], flush=True)
 
                     try:
                         self.respond_to_mention(mention)
                     except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                         self.handle_error()
                     except KeyboardInterrupt:
-                        print("\nShutting down gracefully...")
+                        print("\nShutting down gracefully...", flush=True)
                         raise
 
                     if mention['status']['id'] > latest_mention_id:
@@ -232,11 +232,11 @@ try:
 
 except KeyboardInterrupt:
     # Only really matters for debugging
-    print("\nShutting down gracefully...")
+    print("\nShutting down gracefully...", flush=True)
     raise
 except Exception as e:
-    print(f"CRITICAL ERROR: {e}")
-    print("Stack trace:")
+    print(f"CRITICAL ERROR: {e}", flush=True)
+    print("Stack trace:", flush=True)
     traceback.print_exc()
     
     # Re-raise or log to file. 
