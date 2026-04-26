@@ -205,21 +205,18 @@ mastodon_api = mastodon_client.init_mastodon(mastodon_base_url, mastodon_access_
 summary_model = env_loader.get_env_variable("SUMMARY_MODEL", "Enter the summary model: ")
 
 psr = PostsSummaryRefresher(mastodon_api, summary_model)
-
-p = threading.Thread(target=psr.start_loop)
-
-p.start()
-
 rlp = RandomLlmPoster(mastodon_api)
 flr = FollowsRefresher(mastodon_api)
 fnc = FallbackNotificationCheck(mastodon_api)
 
+p = threading.Thread(target=psr.start_loop)
 r = threading.Thread(target=rlp.start_loop)
 f = threading.Thread(target=flr.start_loop)
 n = threading.Thread(target=fnc.start_loop)
 
 try:
-    
+
+    p.start()
     f.start()
 
     # wait a little bit
@@ -228,7 +225,7 @@ try:
     r.start()
     n.start()
 
-    f.join(); r.join(); n.join()
+    p.join(); f.join(); r.join(); n.join()
 
 except KeyboardInterrupt:
     # Only really matters for debugging
