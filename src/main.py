@@ -212,31 +212,35 @@ p.start()
 
 rlp = RandomLlmPoster(mastodon_api)
 flr = FollowsRefresher(mastodon_api)
+fnc = FallbackNotificationCheck(mastodon_api)
 
 r = threading.Thread(target=rlp.start_loop)
 f = threading.Thread(target=flr.start_loop)
-
-f.start()
-
-# wait a little bit
-time.sleep(5)
-
-r.start()
+n = threading.Thread(target=fnc.start_loop)
 
 try:
-    # Listen for notifications using streaming API
-    mastodon_api.stream_user(Stream(mastodon_api)) #Launch stream
-except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ConnectionError, TimeoutError, MastodonMalformedEventError) as e:
-    print(f"Streaming API failed: {e}")
-    # streaming API fails, start fallback
-    fnc = FallbackNotificationCheck(mastodon_api)
+    
+    f.start()
 
-    n = threading.Thread(target=fnc.start_loop)
+    # wait a little bit
+    time.sleep(5)
 
+    r.start()
     n.start()
+
+    f.join(); r.join(); n.join()
+
 except KeyboardInterrupt:
+    # Only really matters for debugging
     print("\nShutting down gracefully...")
     raise
+except Exception as e:
+    print(f"CRITICAL ERROR: {e}")
+    print("Stack trace:")
+    traceback.print_exc()
+    
+    # Re-raise or log to file. 
+    raise 
 
 # TODO - move updating context file and updating file into a separate script file, so it can be called on notification as well. 
 
