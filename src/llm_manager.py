@@ -43,7 +43,7 @@ def chat_with_file(url, api_key, model, messages, file_id):
             'messages': messages,
             'files': [{'type': 'file', 'id': file_id}]
         }
-        print(payload)
+        print(payload, flush=True)
         response = requests.post(url + "chat/completions", headers=headers, json=payload)
         response.raise_for_status()
         return response

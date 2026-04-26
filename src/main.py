@@ -117,7 +117,7 @@ class PostsSummaryRefresher(LlmPoster):
 
             messages = [
                 {"role": "user", 
-                "content": "Summarize the main topics and themes discussed in the attached file."}]
+                "content": "The attached file contains posts from a microblogging forum. Summarize the main topics and themes discussed, as well as providing notes on the typical posting style of the forum's users (e.g. use of emojis, hashtags)."}]
 
             generated_text = llm_manager.chat_with_file_validated(
                 self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
