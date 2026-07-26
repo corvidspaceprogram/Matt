@@ -12,6 +12,7 @@ from datetime import datetime
 import threading
 import time
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
+from logger import logger, warning_handler
 
 # Class for responding to mentions
 class Stream(StreamListener, LlmPoster):
@@ -19,7 +20,7 @@ class Stream(StreamListener, LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
         StreamListener.__init__(self)
 
-        if self.run_mode == "dev": print("Initializing notification listener")
+        logger.info("[Stream] Initializing notification listener")
 
     def on_notification(self,notif): #Called when a notification comes
         if notif['type'] == 'mention': #Check if the content of the notification is a mention
@@ -30,7 +31,7 @@ class Stream(StreamListener, LlmPoster):
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                 self.handle_error(context="[Stream] Notification handling")
             except KeyboardInterrupt:
-                print("\nShutting down gracefully...", flush=True)
+                logger.info("[Stream] Shutting down gracefully")
                 raise
 
 # Class for random posts
@@ -39,7 +40,7 @@ class RandomLlmPoster(LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Starting random post schedule loop.", flush=True)
+        logger.info("[RandomLlmPoster] Starting schedule loop")
 
         while True:
             """
@@ -82,15 +83,17 @@ class RandomLlmPoster(LlmPoster):
                     mastodon_client.post_public(self.mastodon_api, generated_text,\
                         self.char_limit)
                 elif self.run_mode == "dev":
+                    logger.info("[RandomLlmPoster] Generated output: " + generated_text[:100] + "...")
                     print(generated_text, flush=True)
                     if self.admin_account is not None:
                         mastodon_client.post_dm(self.mastodon_api, \
                             generated_text, self.char_limit, self.admin_account)
 
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
+                logger.warning("[RandomLlmPoster] Posting loop error: " + str(e))
                 self.handle_error(context="[RandomLlmPoster] Posting loop")
             except KeyboardInterrupt:
-                print("\nShutting down gracefully...", flush=True)
+                logger.info("[RandomLlmPoster] Shutting down gracefully")
                 raise
 
 
@@ -102,7 +105,7 @@ class FollowsRefresher(LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Starting follower refresh loop", flush=True)
+        logger.info("[FollowsRefresher] Starting loop")
 
         while True:
             mastodon_client.refresh_follows(self.mastodon_api)
@@ -115,29 +118,27 @@ class FallbackNotificationCheck(LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
 
     def start_loop(self):
-        if self.run_mode == "dev": print("Mastodon API streaming failed, began fallback notification loop", flush=True)
+        logger.info("[FallbackNotificationCheck] Starting fallback notification loop")
 
         latest_mention_id = mastodon_client.fetch_latest_mention(self.mastodon_api)['status']['id']
-
-        if self.run_mode == "dev": print("Latest mention: " + latest_mention_id, flush=True)
+        logger.info(f"[FallbackNotificationCheck] Latest mention: {latest_mention_id}")
 
         while True:
             mentions = mastodon_client.fetch_new_mentions(self.mastodon_api, latest_mention_id) 
 
             if mentions:
-                if self.run_mode == "dev":
-                    print("New mentions found!", flush=True)
+                logger.debug("[FallbackNotificationCheck] New mentions found")
 
                 for mention in mentions:
-                    if self.run_mode == "dev":
-                        print(mention['status']['content'], flush=True)
+                    logger.debug(f"[FallbackNotificationCheck] New mention: {mention['status']['content']}")
 
                     try:
                         self.respond_to_mention(mention)
                     except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
+                        logger.warning("[FallbackNotificationCheck] Mention handling error: " + str(e))
                         self.handle_error(context="[Stream] Mention handling")
                     except KeyboardInterrupt:
-                        print("\nShutting down gracefully...", flush=True)
+                        logger.info("[FallbackNotificationCheck] Shutting down gracefully")
                         raise
 
                     if mention['status']['id'] > latest_mention_id:
@@ -161,6 +162,7 @@ validate_all()
 mastodon_base_url = env_loader.get_env_variable("MASTODON_BASE_URL", "Enter your Mastodon base URL: ")
 mastodon_access_token = env_loader.get_env_variable("MASTODON_ACCESS_TOKEN", "Enter your Mastodon access token: ")
 mastodon_api = mastodon_client.init_mastodon(mastodon_base_url, mastodon_access_token)
+logger.info("[Main] Mastodon API initialized successfully")
 
 rlp = RandomLlmPoster(mastodon_api)
 flr = FollowsRefresher(mastodon_api)
@@ -171,6 +173,7 @@ f = threading.Thread(target=flr.start_loop)
 n = threading.Thread(target=fnc.start_loop)
 
 try:
+    logger.info("[Main] Starting background threads")
 
     f.start()
 
@@ -184,11 +187,11 @@ try:
 
 except KeyboardInterrupt:
     # Only really matters for debugging
-    print("\nShutting down gracefully...", flush=True)
+    logger.info("[Main] Shutting down gracefully")
     raise
 except Exception as e:
-    print(f"CRITICAL ERROR (Thread initialization): {e}", flush=True)
-    print("Stack trace:", flush=True)
+    logger.error(f"[Main] CRITICAL ERROR (Thread initialization): {e}")
+    logger.error("[Main] Stack trace: " + traceback.format_exc())
     traceback.print_exc()
     
     # Re-raise or log to file. 

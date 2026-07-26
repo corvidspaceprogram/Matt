@@ -1,5 +1,6 @@
 import requests
 import json
+from logger import logger
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError
 from retry_utils import retry_with_backoff
 from validation_utils import validate_llm_response, validate_file_upload_response, validate_json_response
@@ -43,7 +44,7 @@ def chat_with_file(url, api_key, model, messages, file_id):
             'messages': messages,
             'files': [{'type': 'file', 'id': file_id}]
         }
-        print(payload, flush=True)
+        logger.debug(f"[LLM] Payload to LLM chat with file {file_id}: {payload}")
         response = requests.post(url + "chat/completions", headers=headers, json=payload)
         response.raise_for_status()
         return response

@@ -10,6 +10,7 @@ import traceback
 import time
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
 from datetime import datetime
+from logger import logger
 
 class LlmPoster():
     def __init__(self, mastodon_api):
@@ -85,19 +86,18 @@ class LlmPoster():
                     self.llm_api_url, self.llm_api_key, self.llm_model, messages)
 
             if self.run_mode == "dev": 
-                print(content, flush=True)
+                logger.debug("[LLM] Generated response")
 
             try: 
                 generated_text = llm_manager.evaluate_response(content)
 
                 response_accepted = True
             except (json.JSONDecodeError, KeyError, ValueError):
-                if self.run_mode == "dev": 
-                    print("Response does not contain valid post format: \n\n" + content + "\n", flush=True)
+                logger.warning("[LLM] Response does not contain valid post format")
                 continue
 
             if self.run_mode == "dev":
-                print(content, flush=True)
+                logger.debug("[LLM] Generated response")
 
         return generated_text
 
@@ -124,18 +124,20 @@ class LlmPoster():
         #     " conversation: \n\n "
         # query += context
 
-        if self.run_mode == "dev": print(messages, flush=True)
+        if self.run_mode == "dev": 
+            logger.debug("[LLM] Messages prepared for LLM call")
 
         generated_text = self.llm_chat(messages, file_id)
 
         if self.run_mode == "prod":
             mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)
         elif self.run_mode == "dev":
-            print(generated_text, flush=True)
+                logger.debug("[LLM] Generated output: " + generated_text[:100] + "...")
+                print(generated_text, flush=True)
 
-            if self.admin_account is not None:
-                mastodon_client.post_dm(self.mastodon_api, \
-                    generated_text, self.char_limit, self.admin_account)
+                if self.admin_account is not None:
+                    mastodon_client.post_dm(self.mastodon_api, \
+                        generated_text, self.char_limit, self.admin_account)
 
     def handle_error(self, context=""):
         """
@@ -156,10 +158,9 @@ class LlmPoster():
         full_msg = traceback.format_exc()
         log_entry = f"{timestamp} - {error_type}{context_str}: {str(error)}\n{full_msg}\n"
         
-        if self.run_mode == "dev":
-            print(" > ERROR:", flush=True)
-            print(error_msg, flush=True)
-            print(full_msg, flush=True)
+        logger.warning(" > ERROR:")
+        logger.warning(error_msg)
+        logger.warning(full_msg)
 
         # Log to file with timestamp
         with open('errorlog.txt', "a") as f:

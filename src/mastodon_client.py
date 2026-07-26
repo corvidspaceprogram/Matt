@@ -1,6 +1,7 @@
 from mastodon import Mastodon
 from text_cleaner import clean_content, clean_content_keep_usernames
 import json
+from logger import logger
 
 def init_mastodon(api_base_url, access_token):
     return Mastodon(access_token=access_token, api_base_url=api_base_url)
@@ -10,7 +11,7 @@ def get_account_id(api, username):
         account = api.account_search(username)[0]
         return account['id']
     except Exception as e:
-        print(f"Error retrieving account ID for {username}: {e}", flush=True)
+        logger.warning(f"[Mastodon] Error retrieving account ID for {username}: {e}")
         return None
 
 def fetch_account_posts(api, account_id, clean_func):
@@ -45,18 +46,20 @@ def store_instance_posts(api, max_context_length, clean_func):
                     posts.update({status["id"]: clean_func(status["content"])})
             max_id = batch[-1]["id"]
 
+            logger.info(f"[Mastodon] Context stored: {len(json.dumps(posts))} / {max_context_length} chars")
             print("Stored context: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
         # Prune last (oldest) dictionary items until we get back under max length
         while len(json.dumps(posts)) > max_context_length:
             posts.popitem()
+            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {max_context_length} chars")
             print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
 
     except Exception as e:
-        print(f"Error fetching posts: {e}", flush=True)
+        logger.warning(f"[Mastodon] Error fetching posts: {e}")
         return []
 
 def convert_instance_posts_txt():
@@ -73,7 +76,7 @@ def convert_instance_posts_txt():
             f.write(text)
 
     except Exception as e:
-        print(f"Error converting posts to txt file: {e}", flush=True)
+        logger.warning(f"[Mastodon] Error converting posts to txt file: {e}")
         return []
 
 def update_instance_posts(api, max_context_length, clean_func):
@@ -102,6 +105,7 @@ def update_instance_posts(api, max_context_length, clean_func):
 
             max_id = batch[-1]["id"]
 
+            logger.info(f"[Mastodon] Added new context: {len(json.dumps(new_posts))} / {max_context_length} chars")
             print("Added new context: " + str(len(json.dumps(new_posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
         # Append original posts to new_posts dictionary
@@ -113,13 +117,14 @@ def update_instance_posts(api, max_context_length, clean_func):
         # Prune last (oldest) dictionary items until we get back under max length
         while len(json.dumps(posts)) > max_context_length:
             posts.popitem()
+            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {max_context_length} chars")
             print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
     
     except Exception as e:
-        print(f"Error fetching posts: {e}", flush=True)
+        logger.warning(f"[Mastodon] Error fetching posts: {e}")
         return []
 
 # Creates a posts_tmp.json file ensuring that the combined length of posts and 
@@ -132,6 +137,7 @@ def truncate_post_file(max_context_length, prompt):
         # Prune last (oldest) dictionary items until we get back under max length
         while len(json.dumps(posts)) > (max_context_length - len(prompt)):
             posts.popitem()
+            logger.warning(f"[Mastodon] Pruning old posts for tmp json file: {len(json.dumps(posts))} / {max_context_length} chars")
             print("Pruning old posts for tmp json file: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
         with open('posts_tmp.json', 'w', encoding='utf-8') as f:
@@ -182,14 +188,14 @@ def post_public(api, text, char_limit):
     if len(text) > char_limit:
         text = text[:char_limit]
     response = api.status_post(status=text, language="EN", visibility="public")
-    print(f"Posted successfully: {response['url']}", flush=True)
+    logger.info(f"[Mastodon] Posted successfully: {response['url'][:80]}")
 
 def post_dm(api, text, char_limit, target_account):
     post_text = target_account + " \n\n" + text
     if len(post_text) > char_limit:
         post_text = post_text[:char_limit]
     response = api.status_post(status=post_text, language="EN", visibility="direct")
-    print(f"Posted successfully: {response['url']}", flush=True)
+    logger.info(f"[Mastodon] DM Posted successfully: {response['url'][:80]}")
 
 def post_reply(api, text, char_limit, original_status):
 
@@ -206,6 +212,8 @@ def post_reply(api, text, char_limit, original_status):
 
     # status_reply prepends mentions for the accounts being replied to and retains the visibility of the previous post automatically.
     response = api.status_reply(status=text, to_status=original_status, language="EN")
+
+    logger.info(f"[Mastodon] Reply Posted successfully: {response['url'][:80]}")
 
     print(f"Posted successfully: {response['url']}", flush=True)
 
@@ -240,7 +248,7 @@ def fetch_latest_mention(api):
             max_id = batch[-1]["id"]
 
     except Exception as e:
-        print(f"Error fetching notifications: {e}", flush=True)
+        logger.warning(f"[Mastodon] Error fetching notifications: {e}")
         return []
 
 def fetch_new_mentions(api, min_id):
@@ -263,6 +271,6 @@ def fetch_new_mentions(api, min_id):
             max_id = batch[-1]["id"]
 
     except Exception as e:
-        print(f"Error fetching notifications: {e}", flush=True)
+        logger.warning(f"[Mastodon] Error fetching notifications: {e}")
         return []
 

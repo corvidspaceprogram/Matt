@@ -6,6 +6,7 @@ at startup, failing fast with clear error messages if something is misconfigured
 """
 
 import os
+from logger import logger
 from bot_exceptions import ConfigurationError
 
 
@@ -58,6 +59,7 @@ def validate_required_variables():
         
         if not value:
             errors.append(f"Missing required environment variable: {var_name}")
+            logger.warning(f"[Validator] Missing required environment variable: {var_name}")
             continue
         
         # Validate numeric values
@@ -134,6 +136,7 @@ def print_configuration():
     Print current configuration (with sensitive values redacted).
     Useful for debugging.
     """
+    logger.info("[Validator] Configuration (debug info):")
     print("Current Configuration:")
     print("-" * 40)
     
