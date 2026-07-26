@@ -66,10 +66,6 @@ class LlmPoster():
 
         mastodon_client.convert_instance_posts_txt()
 
-        # Delete previous posts_tmp.txt from server
-        llm_manager.delete_files(self.llm_api_url, \
-            self.llm_api_key, 'posts_tmp.txt')
-
         file_upload_response = llm_manager.upload_file(\
             self.llm_api_url, self.llm_api_key, 'posts_tmp.txt')
         file_id = file_upload_response['id']
@@ -107,12 +103,8 @@ class LlmPoster():
 
     def respond_to_mention(self, mention):
 
-        file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
-
-        while file_id is None:
-            print("No post summary found. Trying again in 30 seconds.", flush=True)
-            time.sleep(30)
-            file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
+        # Prepare context (posts_tmp.txt)
+        file_id = self.prepare_context()
 
         time.sleep(5)
 

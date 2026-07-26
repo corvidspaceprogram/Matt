@@ -85,7 +85,6 @@ src/
 ### Key Patterns
 
 **Threading:** Multiple concurrent loops run in separate threads:
-- Posts summary refresher (hourly)
 - Random poster (6-48 hour intervals)
 - Follower refresher (5 minute intervals)
 - Notification listener (streaming, fallback to polling)

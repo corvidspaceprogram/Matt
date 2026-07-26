@@ -19,7 +19,7 @@ class Stream(StreamListener, LlmPoster):
         LlmPoster.__init__(self, mastodon_api)
         StreamListener.__init__(self)
 
-        if self.run_mode == "dev": print("Initializing notification listener", flush=True)
+        if self.run_mode == "dev": print("Initializing notification listener")
 
     def on_notification(self,notif): #Called when a notification comes
         if notif['type'] == 'mention': #Check if the content of the notification is a mention
@@ -28,7 +28,7 @@ class Stream(StreamListener, LlmPoster):
                 self.respond_to_mention(notif)
 
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
-                self.handle_error(context="[PostsSummaryRefresher] Context refresh loop")
+                self.handle_error(context="[Stream] Notification handling")
             except KeyboardInterrupt:
                 print("\nShutting down gracefully...", flush=True)
                 raise
@@ -65,12 +65,8 @@ class RandomLlmPoster(LlmPoster):
                 # Write to file
                 refresh_schedule.write_refresh_to_file(next_refresh, "next_post_time.txt")
 
-                file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
-
-                while file_id is None:
-                    print("No post summary found. Trying again in 30 seconds.", flush=True)
-                    time.sleep(30)
-                    file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
+                # Prepare context (posts_tmp.txt)
+                file_id = self.prepare_context()
 
                 # This is necessary to allow the text embedding model enough time to load before the embeddings are needed. 
                 time.sleep(5)
@@ -92,48 +88,12 @@ class RandomLlmPoster(LlmPoster):
                             generated_text, self.char_limit, self.admin_account)
 
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
-                self.handle_error(context="[PostsSummaryRefresher] Context refresh loop")
+                self.handle_error(context="[RandomLlmPoster] Posting loop")
             except KeyboardInterrupt:
                 print("\nShutting down gracefully...", flush=True)
                 raise
 
-class PostsSummaryRefresher(LlmPoster):
-    def __init__(self, mastodon_api, summary_model):
-        LlmPoster.__init__(self, mastodon_api)
-        self.llm_model = summary_model
 
-    def start_loop(self):
-        if self.run_mode == "dev": print("Starting context refresh loop", flush=True)
-
-        while True:
-
-            # First delete existing summary file (this blocks any other requests)
-            llm_manager.delete_files(self.llm_api_url, \
-                self.llm_api_key, 'posts_summary.txt')
-
-            file_id = self.prepare_context()
-
-            time.sleep(30)
-
-            messages = [
-                {"role": "user", 
-                "content": "The attached file contains posts from a microblogging forum. Summarize the main topics and themes discussed, as well as providing notes on the typical posting style of the forum's users (e.g. use of emojis, hashtags)."}]
-
-            generated_text = llm_manager.chat_with_file_validated(
-                self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
-
-            if self.run_mode == "dev":
-                print(generated_text, flush=True)
-
-            #generated_text = self.llm_chat(messages, file_id=file_id)
-
-            with open('posts_summary.txt', 'w', encoding='utf-8') as f:
-                f.write(generated_text)
-
-            llm_manager.upload_file(self.llm_api_url, self.llm_api_key, 'posts_summary.txt')
-
-            # Wait for an hour
-            time.sleep(3600)
 
 
 # Class to regularly refresh follows
@@ -202,21 +162,16 @@ mastodon_base_url = env_loader.get_env_variable("MASTODON_BASE_URL", "Enter your
 mastodon_access_token = env_loader.get_env_variable("MASTODON_ACCESS_TOKEN", "Enter your Mastodon access token: ")
 mastodon_api = mastodon_client.init_mastodon(mastodon_base_url, mastodon_access_token)
 
-summary_model = env_loader.get_env_variable("SUMMARY_MODEL", "Enter the summary model: ")
-
-psr = PostsSummaryRefresher(mastodon_api, summary_model)
 rlp = RandomLlmPoster(mastodon_api)
 flr = FollowsRefresher(mastodon_api)
 fnc = FallbackNotificationCheck(mastodon_api)
 
-p = threading.Thread(target=psr.start_loop)
 r = threading.Thread(target=rlp.start_loop)
 f = threading.Thread(target=flr.start_loop)
 n = threading.Thread(target=fnc.start_loop)
 
 try:
 
-    p.start()
     f.start()
 
     # wait a little bit
@@ -225,7 +180,7 @@ try:
     r.start()
     n.start()
 
-    p.join(); f.join(); r.join(); n.join()
+    f.join(); r.join(); n.join()
 
 except KeyboardInterrupt:
     # Only really matters for debugging
