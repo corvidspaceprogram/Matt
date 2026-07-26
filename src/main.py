@@ -28,7 +28,7 @@ class Stream(StreamListener, LlmPoster):
                 self.respond_to_mention(notif)
 
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
-                self.handle_error()
+                self.handle_error(context="[PostsSummaryRefresher] Context refresh loop")
             except KeyboardInterrupt:
                 print("\nShutting down gracefully...", flush=True)
                 raise
@@ -92,7 +92,7 @@ class RandomLlmPoster(LlmPoster):
                             generated_text, self.char_limit, self.admin_account)
 
             except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
-                self.handle_error()
+                self.handle_error(context="[PostsSummaryRefresher] Context refresh loop")
             except KeyboardInterrupt:
                 print("\nShutting down gracefully...", flush=True)
                 raise
@@ -175,7 +175,7 @@ class FallbackNotificationCheck(LlmPoster):
                     try:
                         self.respond_to_mention(mention)
                     except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
-                        self.handle_error()
+                        self.handle_error(context="[Stream] Mention handling")
                     except KeyboardInterrupt:
                         print("\nShutting down gracefully...", flush=True)
                         raise
@@ -232,7 +232,7 @@ except KeyboardInterrupt:
     print("\nShutting down gracefully...", flush=True)
     raise
 except Exception as e:
-    print(f"CRITICAL ERROR: {e}", flush=True)
+    print(f"CRITICAL ERROR (Thread initialization): {e}", flush=True)
     print("Stack trace:", flush=True)
     traceback.print_exc()
     
