@@ -3,6 +3,8 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+logger = logging.getLogger("mastodon_llm_bot")
+
 
 def setup_logging(config_dir="."):
     """
@@ -64,3 +66,17 @@ def warning_handler(log_file="errorlog.txt"):
             f.write(f"{timestamp} - WARNING: \n{traceback.format_exc()}\n\n")
     except Exception:
         pass  # Don't fail if warning log fails
+
+
+# Auto-initialize logger when this module is imported
+# This ensures logger and warning_handler are properly configured globally
+def _init_logger():
+    """Automatically initialize logging when module is imported."""
+    try:
+        setup_logging()
+    except Exception:
+        pass  # Silent fail - main.py will initialize properly
+
+
+# Call initialization immediately
+_init_logger()
