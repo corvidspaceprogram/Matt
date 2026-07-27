@@ -14,6 +14,9 @@ import time
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
 from logger import logger, warning_handler
 
+# Global shutdown event for graceful termination
+SHUTDOWN_EVENT = threading.Event()
+
 # Class for responding to mentions
 class Stream(StreamListener, LlmPoster):
     def __init__(self, mastodon_api): #Inheritance
@@ -42,7 +45,7 @@ class RandomLlmPoster(LlmPoster):
     def start_loop(self):
         logger.info("[RandomLlmPoster] Starting schedule loop")
 
-        while True:
+        while not SHUTDOWN_EVENT.is_set():
             """
             Raise errors within any function that could fail i.e. interacting 
             with internet - LLM calls and mastodon API stuff.
@@ -53,9 +56,11 @@ class RandomLlmPoster(LlmPoster):
                 # Read next refresh from file
                 next_refresh = refresh_schedule.read_refresh_from_file("next_post_time.txt")
 
-                # Sleep until next refresh
+                # Sleep until next refresh (with shutdown interrupt)
                 if next_refresh is not None:
-                    refresh_schedule.sleep_until_next_refresh(next_refresh)
+                    terminated = refresh_schedule.sleep_until_next_refresh(next_refresh, shutdown_event=SHUTDOWN_EVENT)
+                    if terminated:
+                        break
 
                 # Schedule next refresh
                 current_time = datetime.now()
@@ -67,6 +72,8 @@ class RandomLlmPoster(LlmPoster):
                 refresh_schedule.write_refresh_to_file(next_refresh, "next_post_time.txt")
 
                 # Prepare context (posts_tmp.txt)
+                if SHUTDOWN_EVENT.is_set():
+                    break
                 file_id = self.prepare_context()
 
                 # This is necessary to allow the text embedding model enough time to load before the embeddings are needed. 
@@ -96,7 +103,7 @@ class RandomLlmPoster(LlmPoster):
                 logger.info("[RandomLlmPoster] Shutting down gracefully")
                 raise
 
-
+        logger.info("[RandomLlmPoster] Ending loop")
 
 
 # Class to regularly refresh follows
@@ -107,11 +114,15 @@ class FollowsRefresher(LlmPoster):
     def start_loop(self):
         logger.info("[FollowsRefresher] Starting loop")
 
-        while True:
+        while not SHUTDOWN_EVENT.is_set():    
             mastodon_client.refresh_follows(self.mastodon_api)
 
-            # Sleep 5 minutes
-            time.sleep(300)
+            # Sleep 5 minutes (with shutdown interrupt)
+            terminated = refresh_schedule.sleep_until_shutdown(300, SHUTDOWN_EVENT)
+            if terminated:
+                break
+
+        logger.info("[FollowsRefresher] Ending loop")
 
 class FallbackNotificationCheck(LlmPoster):
     def __init__(self, mastodon_api):
@@ -123,7 +134,8 @@ class FallbackNotificationCheck(LlmPoster):
         latest_mention_id = mastodon_client.fetch_latest_mention(self.mastodon_api)['status']['id']
         logger.info(f"[FallbackNotificationCheck] Latest mention: {latest_mention_id}")
 
-        while True:
+        while not SHUTDOWN_EVENT.is_set():
+                
             mentions = mastodon_client.fetch_new_mentions(self.mastodon_api, latest_mention_id) 
 
             if mentions:
@@ -133,19 +145,29 @@ class FallbackNotificationCheck(LlmPoster):
                     logger.debug(f"[FallbackNotificationCheck] New mention: {mention['status']['content']}")
 
                     try:
-                        self.respond_to_mention(mention)
+                        terminated = self.respond_to_mention(mention)
+                        if terminated:
+                            break
                     except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError) as e:
                         logger.warning("[FallbackNotificationCheck] Mention handling error: " + str(e))
                         self.handle_error(context="[Stream] Mention handling")
                     except KeyboardInterrupt:
                         logger.info("[FallbackNotificationCheck] Shutting down gracefully")
-                        raise
+                        break
 
                     if mention['status']['id'] > latest_mention_id:
                         latest_mention_id = mention['status']['id']
 
+                # Check for shutdown after processing all mentions
+                if SHUTDOWN_EVENT.is_set():
+                    break
+
             # I want this to be reasonably responsive so wait only 10 seconds.
-            time.sleep(10)
+            terminated = refresh_schedule.sleep_until_shutdown(10, SHUTDOWN_EVENT)
+            if terminated:
+                break
+
+        logger.info("[FallbackNotificationCheck] Ending loop")
 
 
 
@@ -188,7 +210,12 @@ try:
 except KeyboardInterrupt:
     # Only really matters for debugging
     logger.info("[Main] Shutting down gracefully")
-    raise
+    SHUTDOWN_EVENT.set()
+    time.sleep(10)  # Allow threads time to notice shutdown and exit loops
+    f.join()
+    r.join()
+    n.join()
+    # raise
 except Exception as e:
     logger.error(f"[Main] CRITICAL ERROR (Thread initialization): {e}")
     logger.error("[Main] Stack trace: " + traceback.format_exc())
@@ -196,11 +223,4 @@ except Exception as e:
     
     # Re-raise or log to file. 
     raise 
-
-# TODO - move updating context file and updating file into a separate script file, so it can be called on notification as well. 
-
-
-
-# except KeyboardInterrupt:
-#     print("\nExiting...")
 

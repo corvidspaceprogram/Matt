@@ -8,6 +8,7 @@ import sys
 import json
 import traceback
 import time
+import threading
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
 from datetime import datetime
 from logger import logger
@@ -18,6 +19,10 @@ class LlmPoster():
 
         # Load environment variables
         env_loader.load_environment_variables()
+        
+        # Reference to shutdown event for graceful termination
+        from main import SHUTDOWN_EVENT
+        self.shutdown_event = SHUTDOWN_EVENT
 
         # Admin account is optional
         try:
@@ -108,7 +113,11 @@ class LlmPoster():
         return generated_text
 
     def respond_to_mention(self, mention):
-
+        
+        # Check if shutdown requested at the start
+        if self.shutdown_event.is_set():
+            return True
+            
         # Prepare context (posts_tmp.txt)
         file_id = self.prepare_context()
 
@@ -144,6 +153,12 @@ class LlmPoster():
                 if self.admin_account is not None:
                     mastodon_client.post_dm(self.mastodon_api, \
                         generated_text, self.char_limit, self.admin_account)
+
+        # Check for shutdown after completion
+        if self.shutdown_event.is_set():
+            return True
+            
+        return False
 
     def handle_error(self, context=""):
         """
