@@ -37,6 +37,12 @@ class LlmPoster():
         except ValueError:
             self.char_limit = 500
 
+        # Keyword filter is optional, defaults to None (no filtering)
+        try: 
+            self.filter_keywords = env_loader.get_env_variable("FILTER_KEY_WORDS")
+        except ValueError:
+            self.filter_keywords = None
+
         try: 
 
             # Mandatory env variables
@@ -55,12 +61,12 @@ class LlmPoster():
             # Refresh post history file
             mastodon_client.update_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content)
+                text_cleaner.clean_content, self.filter_keywords)
         else: 
             # Create posts.json file
             mastodon_client.store_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content)
+                text_cleaner.clean_content, self.filter_keywords)
         
         mastodon_client.truncate_post_file(self.context_limit, \
             self.system_prompt)

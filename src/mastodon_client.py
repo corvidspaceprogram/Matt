@@ -1,10 +1,39 @@
 from mastodon import Mastodon
 from text_cleaner import clean_content, clean_content_keep_usernames
 import json
+import re
 from logger import logger
 
 def init_mastodon(api_base_url, access_token):
     return Mastodon(access_token=access_token, api_base_url=api_base_url)
+
+def contains_keyword(content, keywords):
+    """
+    Check if content contains any of the specified keywords or key phrases.
+    Uses word boundary matching to avoid substring matches within larger words.
+    
+    Args:
+        content: The post content to check
+        keywords: Comma-separated string of keywords (can include hashtags and phrases)
+    
+    Returns:
+        True if any keyword/phrase is found with proper boundaries, False otherwise
+    """
+    if not keywords:
+        return False
+    
+    keyword_list = [k.strip().lower() for k in keywords.split(',')]
+    keyword_list = [k for k in keyword_list if k]
+    
+    content_lower = content.lower()
+    
+    for keyword in keyword_list:
+        # Word boundary regex: not preceded or followed by alphanumeric
+        pattern = r'(?<![a-zA-Z0-9])' + re.escape(keyword) + r'(?![a-zA-Z0-9])'
+        if re.search(pattern, content_lower):
+            return True
+    
+    return False
 
 def get_account_id(api, username):
     try:
@@ -29,8 +58,8 @@ def fetch_account_posts(api, account_id, clean_func):
         print(f"Error fetching posts: {e}", flush=True)
         return []
 
-def store_instance_posts(api, max_context_length, clean_func):
-    
+def store_instance_posts(api, max_context_length, clean_func, filter_keywords=None):
+     
     try:
         my_username = api.me()['username']
 
@@ -43,7 +72,9 @@ def store_instance_posts(api, max_context_length, clean_func):
             for status in batch:
                 # Filtering out own posts and boosts/images with no text content
                 if status['account']['username'] != my_username and status["content"] != "" and status['visibility'] != 'direct':
-                    posts.update({status["id"]: clean_func(status["content"])})
+                    cleaned_content = clean_func(status["content"])
+                    if not contains_keyword(cleaned_content, filter_keywords):
+                        posts.update({status["id"]: cleaned_content})
             max_id = batch[-1]["id"]
 
             logger.info(f"[Mastodon] Context stored: {len(json.dumps(posts))} / {max_context_length} chars")
@@ -79,7 +110,7 @@ def convert_instance_posts_txt():
         logger.warning(f"[Mastodon] Error converting posts to txt file: {e}")
         return []
 
-def update_instance_posts(api, max_context_length, clean_func):
+def update_instance_posts(api, max_context_length, clean_func, filter_keywords=None):
     try:
         my_username = api.me()['username']
 
@@ -98,10 +129,13 @@ def update_instance_posts(api, max_context_length, clean_func):
             if not batch:
                 break
             for status in batch:
+
                 # Add to empty dictionary
                 if status['account']['username'] != my_username and status["content"] != "" and status['visibility'] != 'direct':
-                    new_posts.update(\
-                        {status["id"]: clean_func(status["content"])})
+                    cleaned_content = clean_func(status["content"])
+                    if not contains_keyword(cleaned_content, filter_keywords):
+                        new_posts.update({
+                            status["id"]: cleaned_content})
 
             max_id = batch[-1]["id"]
 
