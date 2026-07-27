@@ -215,7 +215,8 @@ except KeyboardInterrupt:
     f.join()
     r.join()
     n.join()
-    # raise
+    exit()
+    
 except Exception as e:
     logger.error(f"[Main] CRITICAL ERROR (Thread initialization): {e}")
     logger.error("[Main] Stack trace: " + traceback.format_exc())
