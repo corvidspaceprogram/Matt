@@ -121,7 +121,11 @@ class LlmPoster():
         # Prepare context (posts_tmp.txt)
         file_id = self.prepare_context()
 
-        time.sleep(5)
+        terminated = refresh_schedule.sleep_until_shutdown(\
+            30,self.shutdown_event)
+
+        if terminated:
+            return True
 
         st = mention['status']
         message_history = mastodon_client.fetch_context(self.mastodon_api, st)
@@ -131,7 +135,7 @@ class LlmPoster():
 
         # Include a blank message from the user if first post in chain is by assistant. Avoids 400 error for malformed request.
         if message_history[0]["role"] == "assistant":
-            messages += [{"role": "user", "content": "Write a message for the platform, picking one topic from the attached context."}]
+            messages += [{"role": "user", "content": "The attached context file contains examples of recent posts from real users of this platform. Write a post that might appeal to their interests. It is critically important to not copy directly from the context, because that’s plagiarism."}]
 
         messages += message_history
 

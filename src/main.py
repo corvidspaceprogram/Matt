@@ -77,11 +77,14 @@ class RandomLlmPoster(LlmPoster):
                 file_id = self.prepare_context()
 
                 # This is necessary to allow the text embedding model enough time to load before the embeddings are needed. 
-                time.sleep(5)
+                terminated = refresh_schedule.sleep_until_shutdown(\
+                    30,SHUTDOWN_EVENT)
+                if terminated:
+                    break
 
                 messages = [
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": "Write a message for the platform, picking one topic from the attached context."}
+                    {"role": "user", "content": "The attached context file contains examples of recent posts from real users of this platform. Write a post that might appeal to their interests. It is critically important to not copy directly from the context, because that’s plagiarism."}
                 ]
 
                 generated_text = self.llm_chat(messages, file_id=file_id)
