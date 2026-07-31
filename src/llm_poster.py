@@ -10,6 +10,7 @@ import traceback
 import time
 import threading
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
+from refresh_schedule import sleep_until_shutdown
 from datetime import datetime
 from logger import logger
 
@@ -121,8 +122,7 @@ class LlmPoster():
         # Prepare context (posts_tmp.txt)
         file_id = self.prepare_context()
 
-        terminated = refresh_schedule.sleep_until_shutdown(\
-            30,self.shutdown_event)
+        terminated = sleep_until_shutdown(30, self.shutdown_event)
 
         if terminated:
             return True
