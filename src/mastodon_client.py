@@ -58,7 +58,7 @@ def fetch_account_posts(api, account_id, clean_func):
         print(f"Error fetching posts: {e}", flush=True)
         return []
 
-def store_instance_posts(api, max_context_length, clean_func, filter_keywords=None):
+def store_instance_posts(api, max_context_length, clean_func, filter_keywords=None, prompt_length=0):
      
     try:
         my_username = api.me()['username']
@@ -86,6 +86,13 @@ def store_instance_posts(api, max_context_length, clean_func, filter_keywords=No
             logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {max_context_length} chars")
             print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
+        # Further prune to account for system prompt size (for LLM context window)
+        effective_limit = max_context_length - prompt_length
+        while len(json.dumps(posts)) > effective_limit:
+            posts.popitem()
+            logger.warning(f"[Mastodon] Pruning old posts for context: {len(json.dumps(posts))} / {effective_limit} chars")
+            print("Pruning old posts for context: " + str(len(json.dumps(posts))) + " / " + str(effective_limit) + " chars.", flush=True)
+
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
 
@@ -93,24 +100,8 @@ def store_instance_posts(api, max_context_length, clean_func, filter_keywords=No
         logger.warning(f"[Mastodon] Error fetching posts: {e}")
         return []
 
-def convert_instance_posts_txt():
-    try:
-        text = ""
-
-        with open('posts_tmp.json', 'r', encoding='utf-8') as f:
-            posts = json.load(f)
-
-        for value in posts.values():
-            text += value + "\n"
-
-        with open('posts_tmp.txt', 'w', encoding='utf-8') as f:
-            f.write(text)
-
-    except Exception as e:
-        logger.warning(f"[Mastodon] Error converting posts to txt file: {e}")
-        return []
-
-def update_instance_posts(api, max_context_length, clean_func, filter_keywords=None):
+# Fetches the parents of a post chain.
+def update_instance_posts(api, max_context_length, clean_func, filter_keywords=None, prompt_length=0):
     try:
         my_username = api.me()['username']
 
@@ -154,6 +145,13 @@ def update_instance_posts(api, max_context_length, clean_func, filter_keywords=N
             logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {max_context_length} chars")
             print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
 
+        # Further prune to account for system prompt size (for LLM context window)
+        effective_limit = max_context_length - prompt_length
+        while len(json.dumps(posts)) > effective_limit:
+            posts.popitem()
+            logger.warning(f"[Mastodon] Pruning old posts for context: {len(json.dumps(posts))} / {effective_limit} chars")
+            print("Pruning old posts for context: " + str(len(json.dumps(posts))) + " / " + str(effective_limit) + " chars.", flush=True)
+
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
     
@@ -161,27 +159,7 @@ def update_instance_posts(api, max_context_length, clean_func, filter_keywords=N
         logger.warning(f"[Mastodon] Error fetching posts: {e}")
         return []
 
-# Creates a posts_tmp.json file ensuring that the combined length of posts and 
-# prompt stays under the max_context_length
-def truncate_post_file(max_context_length, prompt):
-    try:
-        with open('posts.json', 'r', encoding='utf-8') as f:
-            posts = json.load(f)
-
-        # Prune last (oldest) dictionary items until we get back under max length
-        while len(json.dumps(posts)) > (max_context_length - len(prompt)):
-            posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts for tmp json file: {len(json.dumps(posts))} / {max_context_length} chars")
-            print("Pruning old posts for tmp json file: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
-
-        with open('posts_tmp.json', 'w', encoding='utf-8') as f:
-            json.dump(posts, f, ensure_ascii=False, indent=4)
-
-    except Exception as e:
-        print(f"Error truncating post file: {e}", flush=True)
-        return []
-
-# Fetches the parents of a post chain. 
+# Fetches the parents of a post chain.
 def fetch_context(api, status):
     full_context = api.status_context(status['id'])
 

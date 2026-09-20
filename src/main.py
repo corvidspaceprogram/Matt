@@ -71,7 +71,7 @@ class RandomLlmPoster(LlmPoster):
                 # Write to file
                 refresh_schedule.write_refresh_to_file(next_refresh, "next_post_time.txt")
 
-                # Prepare context (posts_tmp.txt)
+                # Prepare context (posts.json uploaded as LLM file attachment)
                 if SHUTDOWN_EVENT.is_set():
                     break
                 file_id = self.prepare_context()

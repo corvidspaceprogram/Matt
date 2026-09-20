@@ -57,6 +57,7 @@ class LlmPoster():
             self.llm_api_key = env_loader.get_env_variable("LLM_API_KEY")
             self.llm_model = env_loader.get_env_variable("LLM_MODEL")
             self.system_prompt = env_loader.get_env_variable("SYSTEM_PROMPT")
+            self.prompt_length = len(self.system_prompt)
             
         except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ValueError) as e:
             self.handle_error()
@@ -67,20 +68,16 @@ class LlmPoster():
             # Refresh post history file
             mastodon_client.update_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content, self.filter_keywords)
+                text_cleaner.clean_content, self.filter_keywords, self.prompt_length)
         else: 
             # Create posts.json file
             mastodon_client.store_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content, self.filter_keywords)
+                text_cleaner.clean_content, self.filter_keywords, self.prompt_length)
         
-        mastodon_client.truncate_post_file(self.context_limit, \
-            self.system_prompt)
-
-        mastodon_client.convert_instance_posts_txt()
-
+        # Upload posts.json directly (already truncated to fit context window)
         file_upload_response = llm_manager.upload_file(\
-            self.llm_api_url, self.llm_api_key, 'posts_tmp.txt')
+            self.llm_api_url, self.llm_api_key, 'posts.json')
         file_id = file_upload_response['id']
 
         return file_id
@@ -119,7 +116,7 @@ class LlmPoster():
         if self.shutdown_event.is_set():
             return True
             
-        # Prepare context (posts_tmp.txt)
+        # Prepare context (posts.json uploaded as LLM file attachment)
         file_id = self.prepare_context()
 
         terminated = sleep_until_shutdown(30, self.shutdown_event)
