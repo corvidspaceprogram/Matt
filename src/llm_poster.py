@@ -52,12 +52,11 @@ class LlmPoster():
         try: 
 
             # Mandatory env variables
-            self.context_limit = int(env_loader.get_env_variable("MAX_CONTEXT_LENGTH"))
+            self.context_limit = int(env_loader.get_env_variable("POSTS_CONTEXT_LENGTH"))
             self.llm_api_url = env_loader.get_env_variable("LLM_API_URL")
             self.llm_api_key = env_loader.get_env_variable("LLM_API_KEY")
             self.llm_model = env_loader.get_env_variable("LLM_MODEL")
             self.system_prompt = env_loader.get_env_variable("SYSTEM_PROMPT")
-            self.prompt_length = len(self.system_prompt)
             
         except (NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError, ValueError) as e:
             self.handle_error()
@@ -68,12 +67,12 @@ class LlmPoster():
             # Refresh post history file
             mastodon_client.update_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content, self.filter_keywords, self.prompt_length)
+                text_cleaner.clean_content, self.filter_keywords)
         else: 
             # Create posts.json file
             mastodon_client.store_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content, self.filter_keywords, self.prompt_length)
+                text_cleaner.clean_content, self.filter_keywords)
         
         # Upload posts.json directly (already truncated to fit context window)
         file_upload_response = llm_manager.upload_file(\

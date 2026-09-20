@@ -24,7 +24,7 @@ def get_required_env_vars():
         'LLM_API_KEY',
         'LLM_MODEL',
         'SYSTEM_PROMPT',
-        'MAX_CONTEXT_LENGTH',
+        'POSTS_CONTEXT_LENGTH',
     ]
 
 
@@ -63,7 +63,7 @@ def validate_required_variables():
             continue
         
         # Validate numeric values
-        if var_name == 'MAX_CONTEXT_LENGTH':
+        if var_name == 'POSTS_CONTEXT_LENGTH':
             try:
                 int_value = int(value)
                 if int_value <= 0:

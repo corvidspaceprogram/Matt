@@ -58,14 +58,14 @@ def fetch_account_posts(api, account_id, clean_func):
         print(f"Error fetching posts: {e}", flush=True)
         return []
 
-def store_instance_posts(api, max_context_length, clean_func, filter_keywords=None, prompt_length=0):
+def store_instance_posts(api, posts_context_length, clean_func, filter_keywords=None):
      
     try:
         my_username = api.me()['username']
 
         posts = dict()
         max_id=None
-        while len(json.dumps(posts)) < max_context_length:
+        while len(json.dumps(posts)) < posts_context_length:
             batch = api.timeline_home(max_id=max_id)
             if not batch:
                 break
@@ -77,21 +77,14 @@ def store_instance_posts(api, max_context_length, clean_func, filter_keywords=No
                         posts.update({status["id"]: cleaned_content})
             max_id = batch[-1]["id"]
 
-            logger.info(f"[Mastodon] Context stored: {len(json.dumps(posts))} / {max_context_length} chars")
-            print("Stored context: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
+            logger.info(f"[Mastodon] Context stored: {len(json.dumps(posts))} / {posts_context_length} chars")
+            print("Stored context: " + str(len(json.dumps(posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
 
-        # Prune last (oldest) dictionary items until we get back under max length
-        while len(json.dumps(posts)) > max_context_length:
+        # Prune last (oldest) dictionary items until we get back under limit
+        while len(json.dumps(posts)) > posts_context_length:
             posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {max_context_length} chars")
-            print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
-
-        # Further prune to account for system prompt size (for LLM context window)
-        effective_limit = max_context_length - prompt_length
-        while len(json.dumps(posts)) > effective_limit:
-            posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts for context: {len(json.dumps(posts))} / {effective_limit} chars")
-            print("Pruning old posts for context: " + str(len(json.dumps(posts))) + " / " + str(effective_limit) + " chars.", flush=True)
+            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {posts_context_length} chars")
+            print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
 
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
@@ -101,7 +94,7 @@ def store_instance_posts(api, max_context_length, clean_func, filter_keywords=No
         return []
 
 # Fetches the parents of a post chain.
-def update_instance_posts(api, max_context_length, clean_func, filter_keywords=None, prompt_length=0):
+def update_instance_posts(api, posts_context_length, clean_func, filter_keywords=None):
     try:
         my_username = api.me()['username']
 
@@ -130,8 +123,8 @@ def update_instance_posts(api, max_context_length, clean_func, filter_keywords=N
 
             max_id = batch[-1]["id"]
 
-            logger.info(f"[Mastodon] Added new context: {len(json.dumps(new_posts))} / {max_context_length} chars")
-            print("Added new context: " + str(len(json.dumps(new_posts))) + " / " + str(max_context_length) + " chars.", flush=True)
+            logger.info(f"[Mastodon] Added new context: {len(json.dumps(new_posts))} / {posts_context_length} chars")
+            print("Added new context: " + str(len(json.dumps(new_posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
 
         # Append original posts to new_posts dictionary
         new_posts.update(posts)
@@ -139,18 +132,11 @@ def update_instance_posts(api, max_context_length, clean_func, filter_keywords=N
         # Replace older posts dictionary with updated version.
         posts = new_posts
 
-        # Prune last (oldest) dictionary items until we get back under max length
-        while len(json.dumps(posts)) > max_context_length:
+        # Prune last (oldest) dictionary items until we get back under limit
+        while len(json.dumps(posts)) > posts_context_length:
             posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {max_context_length} chars")
-            print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(max_context_length) + " chars.", flush=True)
-
-        # Further prune to account for system prompt size (for LLM context window)
-        effective_limit = max_context_length - prompt_length
-        while len(json.dumps(posts)) > effective_limit:
-            posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts for context: {len(json.dumps(posts))} / {effective_limit} chars")
-            print("Pruning old posts for context: " + str(len(json.dumps(posts))) + " / " + str(effective_limit) + " chars.", flush=True)
+            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {posts_context_length} chars")
+            print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
 
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
