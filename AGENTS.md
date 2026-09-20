@@ -55,10 +55,11 @@ python src/main.py
 - **Class Organization:** Related functionality grouped into classes (e.g., `LlmPoster` base class)
 
 ### Error Handling
-- Use `try/except` blocks for API calls and external dependencies
-- Log errors to `errorlog.txt` using the `handle_error()` method in `LlmPoster`
+- Use custom exceptions from `bot_exceptions.py`: `NetworkError`, `FileOperationError`, `ConfigurationError`, `APIResponseError`, `LLMError` (all inherit from `MastodonBotError`)
+- Wrap API calls and external dependencies in try/except blocks catching these specific exception types
+- Log errors via the global `logger` instance (`from logger import logger`) — structured logging to console + rotating file at `logs/app.log`
+- Legacy error output still writes to `errorlog.txt` via `warning_handler()` for backward compatibility
 - Print errors in dev mode, DM admin account in production
-- Specific error messages should be descriptive
 
 ### File Organization
 ```
@@ -70,7 +71,12 @@ src/
 ├── llm_poster.py        # Base class for posting logic
 ├── text_cleaner.py      # Text processing utilities
 ├── refresh_schedule.py  # Timing and scheduling
-└── warning_manager.py  # Warning suppression
+├── warning_manager.py   # Warning suppression
+├── startup_validator.py # Startup configuration validation
+├── retry_utils.py       # Retry with exponential backoff decorator
+├── logger.py            # Structured logging (console + rotating file)
+├── bot_exceptions.py    # Custom exception hierarchy
+└── validation_utils.py  # API response validation helpers
 ```
 
 ### Documentation Patterns
@@ -79,8 +85,8 @@ src/
 - **TODOs:** Mark future improvements with `# TODO - description`
 
 ### Environment Variables
-- **Mandatory:** `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`, `LLM_API_URL`, `LLM_API_KEY`, `LLM_MODEL`, `SYSTEM_PROMPT`, `MAX_CONTEXT_LENGTH`
-- **Optional:** `DESTINATION_MASTODON_CHAR_LIMIT` (defaults to 500), `ADMIN_MASTODON_ACCOUNT`, `RUN_MODE` (defaults to "dev")
+- **Mandatory:** `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`, `LLM_API_URL`, `LLM_API_KEY`, `LLM_MODEL`, `SYSTEM_PROMPT`, `POSTS_CONTEXT_LENGTH`
+- **Optional:** `DESTINATION_MASTODON_CHAR_LIMIT` (defaults to 500), `ADMIN_MASTODON_ACCOUNT`, `RUN_MODE` (defaults to "dev"), `FILTER_KEY_WORDS` (comma-separated keywords to filter posts), `MAX_RETRIES` (default: 3), `RETRY_INITIAL_DELAY` in seconds (default: 1), `RETRY_MAX_DELAY` in seconds (default: 60)
 
 ### Key Patterns
 
@@ -95,6 +101,12 @@ src/
 - Error logging and admin notifications
 
 **LLM Integration:** Uses OpenAI-compatible API format with file attachments for context management.
+
+**Retry with Backoff:** Functions decorated with `@retry_with_backoff()` from `retry_utils.py` automatically retry on `NetworkError` with exponential backoff (configurable via env vars). Non-network exceptions are not retried.
+
+**Startup Validation:** `startup_validator.validate_all()` is called early in `main.py` to fail fast with clear error messages if required environment variables are missing or invalid.
+
+**API Response Validation:** `validation_utils.py` provides helpers like `validate_json_response()`, `validate_llm_response()`, and `safe_get()` for safe nested data access.
 
 ## Development Notes
 
