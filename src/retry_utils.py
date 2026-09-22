@@ -8,6 +8,7 @@ for network operations that may fail transiently.
 import time
 import functools
 import os
+from logger import logger
 from bot_exceptions import NetworkError
 
 
@@ -48,7 +49,7 @@ def retry_with_backoff(max_retries=None, initial_delay=None, max_delay=None):
                     last_exception = e
                     if attempt < max_retries - 1:
                         delay = min(initial_delay * (2 ** attempt), max_delay)
-                        print(f"Retry {attempt + 1}/{max_retries} for {func.__name__} after {delay}s... Error: {e}")
+                        logger.warning(f"[Retry] {attempt + 1}/{max_retries} for {func.__name__} after {delay}s... Error: {e}")
                         time.sleep(delay)
                     else:
                         # All retries exhausted
@@ -104,7 +105,7 @@ def retry_on_exception(exception_types=None, max_retries=None, initial_delay=Non
                     last_exception = e
                     if attempt < max_retries - 1:
                         delay = min(initial_delay * (2 ** attempt), max_delay)
-                        print(f"Retry {attempt + 1}/{max_retries} for {func.__name__} after {delay}s...")
+                        logger.warning(f"[Retry] {attempt + 1}/{max_retries} for {func.__name__} after {delay}s...")
                         time.sleep(delay)
                     else:
                         raise last_exception

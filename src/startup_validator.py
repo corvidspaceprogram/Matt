@@ -6,6 +6,7 @@ at startup, failing fast with clear error messages if something is misconfigured
 """
 
 import os
+from logger import logger
 from bot_exceptions import ConfigurationError
 
 
@@ -23,7 +24,7 @@ def get_required_env_vars():
         'LLM_API_KEY',
         'LLM_MODEL',
         'SYSTEM_PROMPT',
-        'MAX_CONTEXT_LENGTH',
+        'POSTS_CONTEXT_LENGTH',
     ]
 
 
@@ -58,10 +59,11 @@ def validate_required_variables():
         
         if not value:
             errors.append(f"Missing required environment variable: {var_name}")
+            logger.warning(f"[Validator] Missing required environment variable: {var_name}")
             continue
         
         # Validate numeric values
-        if var_name == 'MAX_CONTEXT_LENGTH':
+        if var_name == 'POSTS_CONTEXT_LENGTH':
             try:
                 int_value = int(value)
                 if int_value <= 0:
@@ -134,6 +136,7 @@ def print_configuration():
     Print current configuration (with sensitive values redacted).
     Useful for debugging.
     """
+    logger.info("[Validator] Configuration (debug info):")
     print("Current Configuration:")
     print("-" * 40)
     

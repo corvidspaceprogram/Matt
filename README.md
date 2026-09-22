@@ -23,6 +23,8 @@ Forked and substantially altered from [mastodon-markov](https://github.com/ewanc
 
 4. Create a `.env` file and add the following variables:
 
+A `.env.example` file is included for reference with all variable names and example values.
+
    ```env
    # Mandatory variables
    MASTODON_BASE_URL=<source Mastodon instance base URL>
@@ -65,13 +67,18 @@ Example of a system prompt:
 ## File Structure
 
 - `/src/`
-  - `warnings_manager.py`: Handles suppression of specific warnings.
+  - `warning_manager.py`: Handles suppression of specific warnings.
   - `env_loader.py`: Loads and manages environment variables.
   - `mastodon_client.py`: Interfaces with the Mastodon API for fetching and posting data.
   - `text_cleaner.py`: Cleans and preprocesses text content.
   - `llm_manager.py`: Manages interaction with the LLM API.
   - `llm_poster.py`: Handles posting generated content to Mastodon.
   - `refresh_schedule.py`: Calculates refresh intervals and manages scheduling.
+  - `startup_validator.py`: Validates configuration at startup for fail-fast error reporting.
+  - `retry_utils.py`: Retry with exponential backoff decorator for network operations.
+  - `logger.py`: Structured logging to console + rotating file.
+  - `bot_exceptions.py`: Custom exception hierarchy for the bot.
+  - `validation_utils.py`: API response validation helpers.
   - `main.py`: Orchestrates the entire process by tying together all modules.
 
 ## Notes

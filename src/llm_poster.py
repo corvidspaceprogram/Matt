@@ -8,8 +8,11 @@ import sys
 import json
 import traceback
 import time
+import threading
 from bot_exceptions import NetworkError, FileOperationError, APIResponseError, ConfigurationError, LLMError
+from refresh_schedule import sleep_until_shutdown
 from datetime import datetime
+from logger import logger
 
 class LlmPoster():
     def __init__(self, mastodon_api):
@@ -17,29 +20,45 @@ class LlmPoster():
 
         # Load environment variables
         env_loader.load_environment_variables()
+        
+        # Reference to shutdown event for graceful termination
+        from main import SHUTDOWN_EVENT
+        self.shutdown_event = SHUTDOWN_EVENT
 
         # Admin account is optional
         try:
             self.admin_account = env_loader.get_env_variable("ADMIN_MASTODON_ACCOUNT")
-        except ValueError:
+        except ConfigurationError:
             self.admin_account = None
 
         # Run mode is optional, defaults to dev
         try:
             self.run_mode = env_loader.get_env_variable("RUN_MODE")
-        except ValueError:
+        except ConfigurationError:
             self.run_mode = "dev"
 
         # Character limit is optional, defaults to 500
         try:
             self.char_limit = int(env_loader.get_env_variable("DESTINATION_MASTODON_CHAR_LIMIT"))
-        except ValueError:
+        except ConfigurationError:
             self.char_limit = 500
+
+        # Keyword filter is optional, defaults to None (no filtering)
+        try: 
+            self.filter_keywords = env_loader.get_env_variable("FILTER_KEY_WORDS")
+        except ConfigurationError:
+            self.filter_keywords = None
+
+        # Own posts max is optional, defaults to 10
+        try:
+            self.own_posts_max = int(env_loader.get_env_variable("OWN_POSTS_MAX"))
+        except ConfigurationError:
+            self.own_posts_max = 10
 
         try: 
 
             # Mandatory env variables
-            self.context_limit = int(env_loader.get_env_variable("MAX_CONTEXT_LENGTH"))
+            self.context_limit = int(env_loader.get_env_variable("POSTS_CONTEXT_LENGTH"))
             self.llm_api_url = env_loader.get_env_variable("LLM_API_URL")
             self.llm_api_key = env_loader.get_env_variable("LLM_API_KEY")
             self.llm_model = env_loader.get_env_variable("LLM_MODEL")
@@ -54,77 +73,71 @@ class LlmPoster():
             # Refresh post history file
             mastodon_client.update_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content)
+                text_cleaner.clean_content, self.filter_keywords, self.own_posts_max)
         else: 
             # Create posts.json file
             mastodon_client.store_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content)
+                text_cleaner.clean_content, self.filter_keywords, self.own_posts_max)
         
-        mastodon_client.truncate_post_file(self.context_limit, \
-            self.system_prompt)
+        # Read file contents for inline embedding
+        with open('posts.json', 'r') as f:
+            context_content = f.read()
+        
+        # Pre-build enriched system prompt
+        self.system_prompt_with_context = (
+            self.system_prompt + 
+            "\n\nContext data below:\n```json\n" + 
+            context_content + "\n```"
+        )
 
-        mastodon_client.convert_instance_posts_txt()
-
-        # Delete previous posts_tmp.txt from server
-        llm_manager.delete_files(self.llm_api_url, \
-            self.llm_api_key, 'posts_tmp.txt')
-
-        file_upload_response = llm_manager.upload_file(\
-            self.llm_api_url, self.llm_api_key, 'posts_tmp.txt')
-        file_id = file_upload_response['id']
-
-        return file_id
-
-    def llm_chat(self, messages, file_id=None):
+    def llm_chat(self, messages):
         response_accepted = False
             
         while not response_accepted:
 
-            if file_id is not None:
-                content = llm_manager.chat_with_file_validated(
-                    self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
-            else:
-                content = llm_manager.chat_with_model_validated(
-                    self.llm_api_url, self.llm_api_key, self.llm_model, messages)
+            content = llm_manager.chat_with_model_validated(
+                self.llm_api_url, self.llm_api_key, self.llm_model, messages)
 
             if self.run_mode == "dev": 
-                print(content)
+                logger.debug("[LLM] Generated response")
 
             try: 
                 generated_text = llm_manager.evaluate_response(content)
 
                 response_accepted = True
             except (json.JSONDecodeError, KeyError, ValueError):
-                if self.run_mode == "dev": 
-                    print("Response does not contain valid post format: \n\n" + content + "\n")
+                logger.warning("[LLM] Response does not contain valid post format")
                 continue
 
             if self.run_mode == "dev":
-                print(content)
+                logger.debug("[LLM] Generated response")
 
         return generated_text
 
     def respond_to_mention(self, mention):
+        
+        # Check if shutdown requested at the start
+        if self.shutdown_event.is_set():
+            return True
+            
+        # Prepare context (inline in system prompt)
+        self.prepare_context()
 
-        file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
+        terminated = sleep_until_shutdown(30, self.shutdown_event)
 
-        while file_id is None:
-            print("No post summary found. Trying again in 30 seconds.")
-            time.sleep(30)
-            file_id = llm_manager.get_file_id(self.llm_api_url, self.llm_api_key, "posts_summary.txt")
-
-        time.sleep(5)
+        if terminated:
+            return True
 
         st = mention['status']
         message_history = mastodon_client.fetch_context(self.mastodon_api, st)
         user = st['account']['username']
 
-        messages = [{"role": "system", "content": self.system_prompt}]
+        messages = [{"role": "system", "content": self.system_prompt_with_context}]
 
         # Include a blank message from the user if first post in chain is by assistant. Avoids 400 error for malformed request.
         if message_history[0]["role"] == "assistant":
-            messages += [{"role": "user", "content": "Write a message for the platform, picking one topic from the attached context."}]
+            messages += [{"role": "user", "content": "Write a post for the forum."}]
 
         messages += message_history
 
@@ -132,18 +145,26 @@ class LlmPoster():
         #     " conversation: \n\n "
         # query += context
 
-        if self.run_mode == "dev": print(messages)
+        if self.run_mode == "dev": 
+            logger.debug("[LLM] Messages prepared for LLM call")
 
-        generated_text = self.llm_chat(messages, file_id)
+        generated_text = self.llm_chat(messages)
 
         if self.run_mode == "prod":
             mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)
         elif self.run_mode == "dev":
-            print(generated_text)
+                logger.debug("[LLM] Generated output: " + generated_text[:100] + "...")
+                print(generated_text, flush=True)
 
-            if self.admin_account is not None:
-                mastodon_client.post_dm(self.mastodon_api, \
-                    generated_text, self.char_limit, self.admin_account)
+                if self.admin_account is not None:
+                    mastodon_client.post_dm(self.mastodon_api, \
+                        generated_text, self.char_limit, self.admin_account)
+
+        # Check for shutdown after completion
+        if self.shutdown_event.is_set():
+            return True
+            
+        return False
 
     def handle_error(self, context=""):
         """
@@ -164,10 +185,9 @@ class LlmPoster():
         full_msg = traceback.format_exc()
         log_entry = f"{timestamp} - {error_type}{context_str}: {str(error)}\n{full_msg}\n"
         
-        if self.run_mode == "dev":
-            print(" > ERROR:")
-            print(error_msg)
-            print(full_msg)
+        logger.warning(" > ERROR:")
+        logger.warning(error_msg)
+        logger.warning(full_msg)
 
         # Log to file with timestamp
         with open('errorlog.txt', "a") as f:

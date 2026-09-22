@@ -85,43 +85,7 @@ def validate_llm_response(response_json, context=""):
     return message['content']
 
 
-def validate_file_upload_response(response_json, context=""):
-    """
-    Validate file upload API response.
-    
-    Args:
-        response_json: Parsed JSON response from file upload API
-        context: Optional context string for error messages
-    
-    Returns:
-        The file ID from the response
-    
-    Raises:
-        APIResponseError: If response is malformed
-    """
-    validate_response_keys(response_json, ['id'], context)
-    
-    return response_json['id']
 
-
-def validate_list_files_response(response_json, context=""):
-    """
-    Validate list files API response.
-    
-    Args:
-        response_json: Parsed JSON response from files list API
-        context: Optional context string for error messages
-    
-    Returns:
-        The files list from the response
-    
-    Raises:
-        APIResponseError: If response is malformed
-    """
-    if not isinstance(response_json, list):
-        raise APIResponseError(f"Expected file list but got {type(response_json).__name__}{context}")
-    
-    return response_json
 
 
 def safe_get(data, key_path, default=None):
