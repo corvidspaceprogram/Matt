@@ -80,24 +80,24 @@ class LlmPoster():
                 self.mastodon_api, self.context_limit, \
                 text_cleaner.clean_content, self.filter_keywords, self.own_posts_max)
         
-        # Upload posts.json directly (already truncated to fit context window)
-        file_upload_response = llm_manager.upload_file(\
-            self.llm_api_url, self.llm_api_key, 'posts.json')
-        file_id = file_upload_response['id']
+        # Read file contents for inline embedding
+        with open('posts.json', 'r') as f:
+            context_content = f.read()
+        
+        # Pre-build enriched system prompt
+        self.system_prompt_with_context = (
+            self.system_prompt + 
+            "\n\nContext data below:\n```json\n" + 
+            context_content + "\n```"
+        )
 
-        return file_id
-
-    def llm_chat(self, messages, file_id=None):
+    def llm_chat(self, messages):
         response_accepted = False
             
         while not response_accepted:
 
-            if file_id is not None:
-                content = llm_manager.chat_with_file_validated(
-                    self.llm_api_url, self.llm_api_key, self.llm_model, messages, file_id)
-            else:
-                content = llm_manager.chat_with_model_validated(
-                    self.llm_api_url, self.llm_api_key, self.llm_model, messages)
+            content = llm_manager.chat_with_model_validated(
+                self.llm_api_url, self.llm_api_key, self.llm_model, messages)
 
             if self.run_mode == "dev": 
                 logger.debug("[LLM] Generated response")
@@ -121,8 +121,8 @@ class LlmPoster():
         if self.shutdown_event.is_set():
             return True
             
-        # Prepare context (posts.json uploaded as LLM file attachment)
-        file_id = self.prepare_context()
+        # Prepare context (inline in system prompt)
+        self.prepare_context()
 
         terminated = sleep_until_shutdown(30, self.shutdown_event)
 
@@ -133,7 +133,7 @@ class LlmPoster():
         message_history = mastodon_client.fetch_context(self.mastodon_api, st)
         user = st['account']['username']
 
-        messages = [{"role": "system", "content": self.system_prompt}]
+        messages = [{"role": "system", "content": self.system_prompt_with_context}]
 
         # Include a blank message from the user if first post in chain is by assistant. Avoids 400 error for malformed request.
         if message_history[0]["role"] == "assistant":
@@ -148,7 +148,7 @@ class LlmPoster():
         if self.run_mode == "dev": 
             logger.debug("[LLM] Messages prepared for LLM call")
 
-        generated_text = self.llm_chat(messages, file_id)
+        generated_text = self.llm_chat(messages)
 
         if self.run_mode == "prod":
             mastodon_client.post_reply(self.mastodon_api, generated_text, self.char_limit, st)

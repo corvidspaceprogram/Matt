@@ -71,10 +71,10 @@ class RandomLlmPoster(LlmPoster):
                 # Write to file
                 refresh_schedule.write_refresh_to_file(next_refresh, "next_post_time.txt")
 
-                # Prepare context (posts.json uploaded as LLM file attachment)
+                # Prepare context (inline in system prompt)
                 if SHUTDOWN_EVENT.is_set():
                     break
-                file_id = self.prepare_context()
+                self.prepare_context()
 
                 # This is necessary to allow the text embedding model enough time to load before the embeddings are needed. 
                 terminated = refresh_schedule.sleep_until_shutdown(\
@@ -83,11 +83,11 @@ class RandomLlmPoster(LlmPoster):
                     break
 
                 messages = [
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": self.system_prompt_with_context},
                     {"role": "user", "content": "Write a post for the forum."}
                 ]
 
-                generated_text = self.llm_chat(messages, file_id=file_id)
+                generated_text = self.llm_chat(messages)
 
                 if self.run_mode == "prod":
                     mastodon_client.post_public(self.mastodon_api, generated_text,\
