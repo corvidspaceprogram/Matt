@@ -28,26 +28,32 @@ class LlmPoster():
         # Admin account is optional
         try:
             self.admin_account = env_loader.get_env_variable("ADMIN_MASTODON_ACCOUNT")
-        except ValueError:
+        except ConfigurationError:
             self.admin_account = None
 
         # Run mode is optional, defaults to dev
         try:
             self.run_mode = env_loader.get_env_variable("RUN_MODE")
-        except ValueError:
+        except ConfigurationError:
             self.run_mode = "dev"
 
         # Character limit is optional, defaults to 500
         try:
             self.char_limit = int(env_loader.get_env_variable("DESTINATION_MASTODON_CHAR_LIMIT"))
-        except ValueError:
+        except ConfigurationError:
             self.char_limit = 500
 
         # Keyword filter is optional, defaults to None (no filtering)
         try: 
             self.filter_keywords = env_loader.get_env_variable("FILTER_KEY_WORDS")
-        except ValueError:
+        except ConfigurationError:
             self.filter_keywords = None
+
+        # Own posts max is optional, defaults to 10
+        try:
+            self.own_posts_max = int(env_loader.get_env_variable("OWN_POSTS_MAX"))
+        except ConfigurationError:
+            self.own_posts_max = 10
 
         try: 
 
@@ -67,12 +73,12 @@ class LlmPoster():
             # Refresh post history file
             mastodon_client.update_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content, self.filter_keywords)
+                text_cleaner.clean_content, self.filter_keywords, self.own_posts_max)
         else: 
             # Create posts.json file
             mastodon_client.store_instance_posts(\
                 self.mastodon_api, self.context_limit, \
-                text_cleaner.clean_content, self.filter_keywords)
+                text_cleaner.clean_content, self.filter_keywords, self.own_posts_max)
         
         # Upload posts.json directly (already truncated to fit context window)
         file_upload_response = llm_manager.upload_file(\
@@ -131,7 +137,7 @@ class LlmPoster():
 
         # Include a blank message from the user if first post in chain is by assistant. Avoids 400 error for malformed request.
         if message_history[0]["role"] == "assistant":
-            messages += [{"role": "user", "content": "The attached context file contains examples of recent posts from real users of this platform. Write a post that might appeal to their interests. It is critically important to not copy directly from the context, because that’s plagiarism."}]
+            messages += [{"role": "user", "content": "Write a post for the forum."}]
 
         messages += message_history
 

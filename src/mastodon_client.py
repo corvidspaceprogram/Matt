@@ -58,34 +58,53 @@ def fetch_account_posts(api, account_id, clean_func):
         print(f"Error fetching posts: {e}", flush=True)
         return []
 
-def store_instance_posts(api, posts_context_length, clean_func, filter_keywords=None):
+def store_instance_posts(api, posts_context_length, clean_func, filter_keywords=None, own_posts_max=10):
      
     try:
         my_username = api.me()['username']
 
-        posts = dict()
-        max_id=None
-        while len(json.dumps(posts)) < posts_context_length:
+        timeline_posts = dict()
+        own_posts = dict()
+        max_id = None
+        while len(json.dumps(timeline_posts)) + len(json.dumps(own_posts)) < posts_context_length:
             batch = api.timeline_home(max_id=max_id)
             if not batch:
                 break
             for status in batch:
-                # Filtering out own posts and boosts/images with no text content
-                if status['account']['username'] != my_username and status["content"] != "" and status['visibility'] != 'direct':
-                    cleaned_content = clean_func(status["content"])
-                    if not contains_keyword(cleaned_content, filter_keywords):
-                        posts.update({status["id"]: cleaned_content})
+                cleaned_content = clean_func(status["content"])
+                # Filter: non-empty content, not direct visibility, no keyword match
+                if (status["content"] != "" and 
+                    status['visibility'] != 'direct' and
+                    not contains_keyword(cleaned_content, filter_keywords)):
+                    if status['account']['username'] == my_username:
+                        own_posts.update({status["id"]: cleaned_content})
+                    else:
+                        timeline_posts.update({status["id"]: cleaned_content})
             max_id = batch[-1]["id"]
 
-            logger.info(f"[Mastodon] Context stored: {len(json.dumps(posts))} / {posts_context_length} chars")
-            print("Stored context: " + str(len(json.dumps(posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
+            combined_size = len(json.dumps(timeline_posts)) + len(json.dumps(own_posts))
+            logger.info(f"[Mastodon] Context stored: {combined_size} / {posts_context_length} chars")
+            print("Stored context: " + str(combined_size) + " / " + str(posts_context_length) + " chars.", flush=True)
 
-        # Prune last (oldest) dictionary items until we get back under limit
-        while len(json.dumps(posts)) > posts_context_length:
-            posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {posts_context_length} chars")
-            print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
+        # Stage 1 pruning: truncate own_posts to own_posts_max (remove oldest first)
+        while len(own_posts) > own_posts_max:
+            oldest_key = min(own_posts.keys(), key=lambda k: int(k))
+            del own_posts[oldest_key]
 
+        # Stage 2 pruning: prune timeline_posts until under limit
+        combined_size = len(json.dumps(timeline_posts)) + len(json.dumps(own_posts))
+        while combined_size > posts_context_length:
+            oldest_key = min(timeline_posts.keys(), key=lambda k: int(k))
+            del timeline_posts[oldest_key]
+            combined_size = len(json.dumps(timeline_posts)) + len(json.dumps(own_posts))
+            logger.warning(f"[Mastodon] Pruning old posts: {combined_size} / {posts_context_length} chars")
+            print("Pruning old posts: " + str(combined_size) + " / " + str(posts_context_length) + " chars.", flush=True)
+
+        # Write nested structure
+        posts = {
+            "own_recent_posts": own_posts,
+            "timeline_recent_posts": timeline_posts
+        }
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
 
@@ -94,50 +113,87 @@ def store_instance_posts(api, posts_context_length, clean_func, filter_keywords=
         return []
 
 # Fetches the parents of a post chain.
-def update_instance_posts(api, posts_context_length, clean_func, filter_keywords=None):
+def update_instance_posts(api, posts_context_length, clean_func, filter_keywords=None, own_posts_max=10):
     try:
         my_username = api.me()['username']
 
+        # Load existing posts.json; detect old format (flat dict) vs new nested format
         with open('posts.json', 'r', encoding='utf-8') as f:
-            posts = json.load(f)
-        
+            existing_data = json.load(f)
+
+        if not isinstance(existing_data, dict) or "own_recent_posts" not in existing_data:
+            # Old flat-format detected; start fresh by calling store_instance_posts
+            store_instance_posts(api, posts_context_length, clean_func, filter_keywords, own_posts_max)
+            return
+
+        existing_own = existing_data.get("own_recent_posts", {})
+        existing_timeline = existing_data.get("timeline_recent_posts", {})
+
         max_id = None
-        min_id = list(posts)[0]
+        # Use oldest timeline post as min_id for pagination
+        if existing_timeline:
+            min_id = min(existing_timeline.keys(), key=lambda k: int(k))
+        else:
+            # No timeline posts; use own posts or start from scratch
+            if existing_own:
+                min_id = min(existing_own.keys(), key=lambda k: int(k))
+            else:
+                store_instance_posts(api, posts_context_length, clean_func, filter_keywords, own_posts_max)
+                return
 
-        # Empty dictionary
-        new_posts = dict()
+        # Fetch new posts between min_id and current
+        timeline_posts = dict()
+        own_posts = dict()
 
-        # populate new_posts dictionary until min_id is reached
         while True:
             batch = api.timeline_home(max_id=max_id, min_id=min_id)
             if not batch:
                 break
             for status in batch:
-
-                # Add to empty dictionary
-                if status['account']['username'] != my_username and status["content"] != "" and status['visibility'] != 'direct':
-                    cleaned_content = clean_func(status["content"])
-                    if not contains_keyword(cleaned_content, filter_keywords):
-                        new_posts.update({
-                            status["id"]: cleaned_content})
+                cleaned_content = clean_func(status["content"])
+                # Filter: non-empty content, not direct visibility, no keyword match
+                if (status["content"] != "" and 
+                    status['visibility'] != 'direct' and
+                    not contains_keyword(cleaned_content, filter_keywords)):
+                    if status['account']['username'] == my_username:
+                        own_posts.update({status["id"]: cleaned_content})
+                    else:
+                        timeline_posts.update({status["id"]: cleaned_content})
 
             max_id = batch[-1]["id"]
 
-            logger.info(f"[Mastodon] Added new context: {len(json.dumps(new_posts))} / {posts_context_length} chars")
-            print("Added new context: " + str(len(json.dumps(new_posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
+            combined_size = len(json.dumps(timeline_posts)) + len(json.dumps(own_posts))
+            logger.info(f"[Mastodon] Added new context: {combined_size} / {posts_context_length} chars")
+            print("Added new context: " + str(combined_size) + " / " + str(posts_context_length) + " chars.", flush=True)
 
-        # Append original posts to new_posts dictionary
-        new_posts.update(posts)
+        # Merge with existing data:
+        # own_posts replaced entirely (only fetch recent posts)
+        merged_own = own_posts if own_posts else existing_own
+        # timeline: new entries first, then older ones not already present
+        merged_timeline = dict(timeline_posts)  # start with new
+        for tid in existing_timeline:
+            if tid not in merged_timeline:
+                merged_timeline[tid] = existing_timeline[tid]
 
-        # Replace older posts dictionary with updated version.
-        posts = new_posts
+        # Stage 1 pruning: truncate own posts to own_posts_max (remove oldest first)
+        while len(merged_own) > own_posts_max:
+            oldest_key = min(merged_own.keys(), key=lambda k: int(k))
+            del merged_own[oldest_key]
 
-        # Prune last (oldest) dictionary items until we get back under limit
-        while len(json.dumps(posts)) > posts_context_length:
-            posts.popitem()
-            logger.warning(f"[Mastodon] Pruning old posts: {len(json.dumps(posts))} / {posts_context_length} chars")
-            print("Pruning old posts: " + str(len(json.dumps(posts))) + " / " + str(posts_context_length) + " chars.", flush=True)
+        # Stage 2 pruning: prune timeline until under limit
+        combined_size = len(json.dumps(merged_timeline)) + len(json.dumps(merged_own))
+        while combined_size > posts_context_length:
+            oldest_key = min(merged_timeline.keys(), key=lambda k: int(k))
+            del merged_timeline[oldest_key]
+            combined_size = len(json.dumps(merged_timeline)) + len(json.dumps(merged_own))
+            logger.warning(f"[Mastodon] Pruning old posts: {combined_size} / {posts_context_length} chars")
+            print("Pruning old posts: " + str(combined_size) + " / " + str(posts_context_length) + " chars.", flush=True)
 
+        # Write nested structure
+        posts = {
+            "own_recent_posts": merged_own,
+            "timeline_recent_posts": merged_timeline
+        }
         with open('posts.json', 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=4)
     

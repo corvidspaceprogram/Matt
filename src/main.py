@@ -84,7 +84,7 @@ class RandomLlmPoster(LlmPoster):
 
                 messages = [
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": "The attached context file contains examples of recent posts from real users of this platform. Write a post that might appeal to their interests. It is critically important to not copy directly from the context, because that’s plagiarism."}
+                    {"role": "user", "content": "Write a post for the forum."}
                 ]
 
                 generated_text = self.llm_chat(messages, file_id=file_id)
