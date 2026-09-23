@@ -1,20 +1,16 @@
 # AGENTS.md
 
-This file contains guidelines and commands for agentic coding agents working on this Mastodon LLM bot repository.
+This file contains guidelines and commands for agentic coding agents working on this Mastodon Image Reply Bot repository.
 
 ## Project Overview
 
-This is a Python project that creates an automated Mastodon bot using LLM-generated content. The bot:
-- Fetches posts from followers for context
-- Generates posts using LLM APIs at random intervals
-- Responds to mentions
-- Manages follow relationships automatically
+This is a Python project that creates an automated Mastodon bot responding to @mentions with randomly selected images. In development mode (`RUN_MODE=dev`), images are sent as direct messages to a specified admin account instead of being posted publicly. The bot runs as a single-threaded notification poller.
 
 ## Environment Setup
 
 **Dependencies Installation:**
 ```bash
-pip install requests mastodon.py python-dotenv html_text
+pip install requests mastodon.py python-dotenv
 ```
 
 **Virtual Environment (Recommended):**
@@ -44,7 +40,7 @@ python src/main.py
 
 ### Naming Conventions
 - **Variables/Functions:** `snake_case` (e.g., `calculate_refresh_interval`, `mastodon_api`)
-- **Classes:** `PascalCase` (e.g., `LlmPoster`, `StreamListener`)
+- **Classes:** `PascalCase` (e.g., `ImageBotBase`, `NotificationPolling`)
 - **Constants:** `UPPER_SNAKE_CASE` (not extensively used, but follow this pattern)
 - **Private methods:** Prefix with underscore if intended for internal use
 
@@ -52,81 +48,61 @@ python src/main.py
 - **Indentation:** 4 spaces (no tabs)
 - **Line Length:** Generally kept under 100 characters
 - **Function Length:** Functions should be focused on single responsibilities
-- **Class Organization:** Related functionality grouped into classes (e.g., `LlmPoster` base class)
+- **Class Organization:** Related functionality grouped into classes (e.g., `ImageBotBase` base class)
 
 ### Error Handling
 - Use custom exceptions from `bot_exceptions.py`: `NetworkError`, `FileOperationError`, `ConfigurationError`, `APIResponseError`, `LLMError` (all inherit from `MastodonBotError`)
 - Wrap API calls and external dependencies in try/except blocks catching these specific exception types
 - Log errors via the global `logger` instance (`from logger import logger`) — structured logging to console + rotating file at `logs/app.log`
-- Legacy error output still writes to `errorlog.txt` via `warning_handler()` for backward compatibility
-- Print errors in dev mode, DM admin account in production
+- Legacy error output writes to `errorlog.txt` directly via inline writes
 
 ### File Organization
 ```
 src/
-├── main.py              # Main orchestration and threading
-├── env_loader.py        # Environment variable management
-├── mastodon_client.py   # Mastodon API interactions
-├── llm_manager.py       # LLM API interactions
-├── llm_poster.py        # Base class for posting logic
-├── text_cleaner.py      # Text processing utilities
+├── main.py              # Main orchestration and notification polling
+├── image_bot_base.py    # Core bot class handling image selection and posting logic
+├── mastodon_client.py   # Mastodon API interactions (mentions, posting, media)
 ├── refresh_schedule.py  # Timing and scheduling
+├── env_loader.py        # Environment variable management
 ├── warning_manager.py   # Warning suppression
 ├── startup_validator.py # Startup configuration validation
-├── retry_utils.py       # Retry with exponential backoff decorator
 ├── logger.py            # Structured logging (console + rotating file)
-├── bot_exceptions.py    # Custom exception hierarchy
-└── validation_utils.py  # API response validation helpers
+└── bot_exceptions.py    # Custom exception hierarchy
 ```
 
 ### Documentation Patterns
-- **Docstrings:** Not extensively used, but add them for complex functions
-- **Comments:** Use inline comments for complex logic or temporary workarounds
+- **Docstrings:** Add them for complex functions and public methods
+- **Comments:** Use inline comments for complex logic or important context
 - **TODOs:** Mark future improvements with `# TODO - description`
 
 ### Environment Variables
-- **Mandatory:** `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`, `LLM_API_URL`, `LLM_API_KEY`, `LLM_MODEL`, `SYSTEM_PROMPT`, `POSTS_CONTEXT_LENGTH`
-- **Optional:** `DESTINATION_MASTODON_CHAR_LIMIT` (defaults to 500), `ADMIN_MASTODON_ACCOUNT`, `RUN_MODE` (defaults to "dev"), `FILTER_KEY_WORDS` (comma-separated keywords to filter posts), `MAX_RETRIES` (default: 3), `RETRY_INITIAL_DELAY` in seconds (default: 1), `RETRY_MAX_DELAY` in seconds (default: 60)
+- **Mandatory:** `MASTODON_BASE_URL`, `MASTODON_ACCESS_TOKEN`
+- **Optional:** `ADMIN_MASTODON_ACCOUNT` (receives dev-mode image DMs and error notifications), `RUN_MODE` (defaults to "dev")
 
 ### Key Patterns
 
-**Threading:** Multiple concurrent loops run in separate threads:
-- Random poster (6-48 hour intervals)
-- Follower refresher (5 minute intervals)
-- Notification listener (streaming, fallback to polling)
+**Notification Polling:** A single polling thread checks for @mentions and responds by selecting a random image from the `/images/` directory. In dev mode, the image is sent as a direct message to the admin account; in prod mode, it's posted as a public reply with attachment.
 
-**Error Recovery:** API failures are caught and handled gracefully:
-- Retry mechanisms for file uploads
-- Fallback notification polling if streaming fails
-- Error logging and admin notifications
-
-**LLM Integration:** Uses OpenAI-compatible API format with file attachments for context management.
-
-**Retry with Backoff:** Functions decorated with `@retry_with_backoff()` from `retry_utils.py` automatically retry on `NetworkError` with exponential backoff (configurable via env vars). Non-network exceptions are not retried.
+**Error Handling:** Errors are logged via `logger` and written to `errorlog.txt`. If `ADMIN_MASTODON_ACCOUNT` is configured, the admin receives a DM with error details via `post_dm()`.
 
 **Startup Validation:** `startup_validator.validate_all()` is called early in `main.py` to fail fast with clear error messages if required environment variables are missing or invalid.
 
-**API Response Validation:** `validation_utils.py` provides helpers like `validate_json_response()`, `validate_llm_response()`, and `safe_get()` for safe nested data access.
-
 ## Development Notes
 
-- **Dev Mode:** Set `RUN_MODE=dev` to print instead of post publicly
-- **Admin Notifications:** Configure `ADMIN_MASTODON_ACCOUNT` to receive error DMs
-- **Context Management:** Posts are stored in `posts.json`, truncated to respect context limits
-- **Character Limits:** Posts are automatically truncated to respect instance limits
-- **Special Characters:** LLM outputs are evaluated for ¥...√ delimiters before posting
+- **Dev Mode:** Set `RUN_MODE=dev` to send randomly selected images as DMs to the admin account instead of replying publicly to mentions
+- **Image Directory:** Place `.jpg`, `.jpeg`, `.png`, `.gif` files in `/images/` at the project root. The bot randomly selects one for each mention response.
+- The bot is image-only — no text posts or message content are generated.
 
 ## No Build/Lint/Test Commands
 
 This project does not include automated testing, linting, or build processes. Manual testing is performed by:
 1. Running `python src/main.py`
 2. Observing console output in dev mode
-3. Checking actual posts in production mode
+3. Checking actual posts/DMs in production mode
 4. Monitoring `errorlog.txt` for issues
 
 ## Key Dependencies
 
 - `mastodon.py` - Mastodon API client
-- `requests` - HTTP client for LLM API calls
+- `requests` - HTTP client (provided by mastodon.py)
 - `python-dotenv` - Environment variable management
-- `html_text` - HTML content extraction and cleaning

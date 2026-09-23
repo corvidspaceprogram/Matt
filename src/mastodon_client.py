@@ -19,28 +19,23 @@ def post_reply_with_media(api, text, status, media_id, char_limit=500):
     return response
 
 
-def post_dm(api, text, char_limit, target_account):
-    post_text = target_account + " \n\n" + text
-    if len(post_text) > char_limit:
-        post_text = post_text[:char_limit]
-    response = api.status_post(status=post_text, language="EN", visibility="direct")
-    logger.info(f"[Mastodon] DM Posted successfully: {response['url'][:80]}")
+def post_dm(api, text, target_account):
+    """Send a plain-text direct message to the admin account."""
+    response = api.status_post(status=text, visibility="direct")
+    logger.info(f"[Mastodon] DM sent to {target_account}: {text[:80]}")
+    return response
 
 
-# Use regularly to check follows and make sure following is matched.
-def refresh_follows(api):
-
-    # Follow anyone who follows me that I don't follow yet
-    for account in api.account_followers(api.me()):
-        if account not in api.account_following(api.me()):
-            api.account_follow(account)
-
-    # Unfollow anyone I follow who no longer follows me
-    for account in api.account_following(api.me()):
-        if account not in api.account_followers(api.me()):
-            api.account_unfollow(account)
-
-    # Follow is a weird word
+def post_dm_with_media(api, media_id, selected_image, target_account):
+    """Upload an image and send it as a direct message to the admin account."""
+    uploaded_id = api.media_post(selected_image)
+    response = api.status_post(
+        status="",
+        media_ids=[uploaded_id],
+        visibility="direct"
+    )
+    logger.info(f"[Mastodon] DM with media sent to {target_account}: media_id={uploaded_id}")
+    return response
 
 def fetch_latest_mention(api):
     try:
@@ -84,3 +79,6 @@ def fetch_new_mentions(api, min_id):
     except Exception as e:
         logger.warning(f"[Mastodon] Error fetching notifications: {e}")
         return []
+
+
+

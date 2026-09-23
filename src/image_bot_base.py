@@ -30,11 +30,7 @@ class ImageBotBase():
         except ConfigurationError:
             self.run_mode = "dev"
 
-        # Character limit is optional, defaults to 500
-        try:
-            self.char_limit = int(env_loader.get_env_variable("DESTINATION_MASTODON_CHAR_LIMIT"))
-        except ConfigurationError:
-            self.char_limit = 500
+
 
     def respond_to_mention(self, mention):
         """
@@ -82,16 +78,25 @@ class ImageBotBase():
         media_id = self.mastodon_api.media_post(selected_image)
         logger.info(f"[ImageBot] Uploaded image, media_id: {media_id}")
 
-        # Post reply with media attachment
-        mastodon_client.post_reply_with_media(
-            self.mastodon_api,
-            text="",  # Empty reply; image is the content
-            status=st,
-            media_id=media_id,
-            char_limit=self.char_limit
-        )
-
-        logger.info(f"[ImageBot] Reply posted successfully for mention")
+        # In dev mode, send image as DM to admin instead of replying publicly
+        if self.run_mode == "dev":
+            mastodon_client.post_dm_with_media(
+                self.mastodon_api,
+                media_id=media_id,
+                selected_image=selected_image,
+                target_account=self.admin_account
+            )
+            logger.info(f"[ImageBot] Dev DM sent to {self.admin_account}")
+        else:
+            # Post reply with media attachment (prod mode)
+            mastodon_client.post_reply_with_media(
+                self.mastodon_api,
+                text="",
+                status=st,
+                media_id=media_id,
+                char_limit=500
+            )
+            logger.info(f"[ImageBot] Reply posted successfully for mention")
 
         # Check for shutdown after completion
         if self.shutdown_event.is_set():
@@ -126,12 +131,10 @@ class ImageBotBase():
         with open('errorlog.txt', "a") as f:
             f.write(log_entry)
 
-        # DM admin account with cleaner error message
+        # DM admin account with error details
         if self.admin_account is not None:
             admin_msg = f"Error: {error_type}{context_str}\n{str(error)[:200]}"
             try:
-                mastodon_client.post_dm(self.mastodon_api, \
-                    admin_msg, self.char_limit, \
-                    self.admin_account)
+                mastodon_client.post_dm(self.mastodon_api, admin_msg, self.admin_account)
             except:
                 pass  # Don't fail if admin notification fails
