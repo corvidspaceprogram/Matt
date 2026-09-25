@@ -26,15 +26,20 @@ def post_dm(api, text, target_account):
     return response
 
 
-def post_dm_with_media(api, media_id, selected_image, target_account):
-    """Upload an image and send it as a direct message to the admin account."""
-    uploaded_id = api.media_post(selected_image)
+def post_dm_with_media(api, media_id, target_account):
+    """Send a direct message to the admin account with the given media attachment.
+
+    Args:
+        api: Mastodon API instance
+        media_id: Pre-resolved media ID from the cache or upload
+        target_account: Account name to send the DM to
+    """
     response = api.status_post(
-        status="",
-        media_ids=[uploaded_id],
+        status=f"{target_account}",
+        media_ids=[media_id],
         visibility="direct"
     )
-    logger.info(f"[Mastodon] DM with media sent to {target_account}: media_id={uploaded_id}")
+    logger.info(f"[Mastodon] DM with media sent to {target_account}: media_id={media_id}")
     return response
 
 def fetch_latest_mention(api):

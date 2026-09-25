@@ -6,7 +6,7 @@ Forked and substantially altered from [mastodon-markov](https://github.com/ewanc
 
 ## Setup
 
-1. Clone this repository and navigate to the `/src/` directory containing the scripts.
+1. Clone this repository. All commands below should be run from the repository root.
 
 2. (Optional) Create and activate a virtual environment for the dependencies: 
 
@@ -18,12 +18,10 @@ Forked and substantially altered from [mastodon-markov](https://github.com/ewanc
 3. Install the required dependencies by running:
 
    ```bash
-   pip install requests mastodon.py python-dotenv
+   pip install mastodon.py python-dotenv
    ```
 
-4. Create a `.env` file and add the following variables:
-
-A `.env.example` file is included in `/src/` for reference with all variable names and example values.
+4. In the `src/` directory, create a `.env` file with the following variables:
 
    ```env
    # Mandatory variables
@@ -34,6 +32,14 @@ A `.env.example` file is included in `/src/` for reference with all variable nam
    ADMIN_MASTODON_ACCOUNT=<admin Mastodon account to DM reports to>
    RUN_MODE=dev  # "dev" sends images as DMs; "prod" replies publicly to mentions
    ```
+
+A `.env.example` file is included in `src/` for reference with all variable names and example values.
+
+To create an access token for this application, go to Settings > Development while logged into Mastodon as the automated account. This bot requires the following application scopes: 
+- `read:notifications`
+- `profile`
+- `write:media`
+- `write:statuses`
 
 ## Usage
 

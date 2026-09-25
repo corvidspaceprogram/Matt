@@ -49,22 +49,13 @@ class ImageBotBase():
         st = mention['status']
 
         # List available image files from repo root /images/
-        repo_images = os.path.join(os.getcwd(), '..', 'images', '*')
-        possible_paths = [
-            repo_images,
-            '/Users/luke/Desktop/Matt/images/*',
-        ]
         image_files = []
-        valid_extensions = ('.jpg', '.jpeg', '.png', '.gif')
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
 
-        for path_template in possible_paths:
-            matches = glob.glob(path_template)
-            for f in matches:
-                if os.path.isfile(f) and os.path.splitext(f)[1].lower() in valid_extensions:
-                    image_files.append(f)
-            # If we found files, stop searching
-            if image_files:
-                break
+        matches = glob.glob(os.path.join(os.getcwd(), 'images', '*'))
+        for f in matches:
+            if os.path.isfile(f) and os.path.splitext(f)[1].lower() in valid_extensions:
+                image_files.append(f)
 
         if not image_files:
             logger.warning("[ImageBot] No image files found in /images/ folder")
@@ -74,7 +65,8 @@ class ImageBotBase():
         selected_image = random.choice(image_files)
         logger.info(f"[ImageBot] Selected: {selected_image}")
 
-        # Upload the image
+        # Upload the image (unique upload required for every post/DM)
+        logger.info(f"[ImageBot] Uploading image for mention response")
         media_id = self.mastodon_api.media_post(selected_image)
         logger.info(f"[ImageBot] Uploaded image, media_id: {media_id}")
 
@@ -83,7 +75,6 @@ class ImageBotBase():
             mastodon_client.post_dm_with_media(
                 self.mastodon_api,
                 media_id=media_id,
-                selected_image=selected_image,
                 target_account=self.admin_account
             )
             logger.info(f"[ImageBot] Dev DM sent to {self.admin_account}")
@@ -128,7 +119,7 @@ class ImageBotBase():
         logger.warning(full_msg)
 
         # Log to file with timestamp
-        with open('errorlog.txt', "a") as f:
+        with open(os.path.join(os.getcwd(), 'errorlog.txt'), "a") as f:
             f.write(log_entry)
 
         # DM admin account with error details

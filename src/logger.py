@@ -6,7 +6,7 @@ from pathlib import Path
 logger = logging.getLogger("mastodon_llm_bot")
 
 
-def setup_logging(config_dir="."):
+def setup_logging():
     """
     Set up structured logging with:
     - Console handler (INFO level for dev, WARNING+ for production)
@@ -22,8 +22,9 @@ def setup_logging(config_dir="."):
     if logger.handlers:
         return logger
     
-    # Create logs directory
-    logs_dir = Path(config_dir) / "logs"
+    # Create logs directory (relative to cwd, assumed to be repo root)
+    import os
+    logs_dir = Path(os.getcwd()) / "logs"
     logs_dir.mkdir(exist_ok=True)
     
     # File handler - captures all levels for debugging
