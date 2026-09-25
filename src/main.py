@@ -25,8 +25,13 @@ class NotificationPolling(ImageBotBase):
     def start_loop(self):
         logger.info("[NotificationPolling] Starting mention polling loop")
 
-        latest_mention_id = mastodon_client.fetch_latest_mention(self.mastodon_api)['status']['id']
-        logger.info(f"[NotificationPolling] Latest mention: {latest_mention_id}")
+        latest_ment = mastodon_client.fetch_latest_mention(self.mastodon_api)
+        if latest_ment is None:
+            logger.info("[NotificationPolling] No prior mentions found — starting fresh")
+            latest_mention_id = 0
+        else:
+            latest_mention_id = latest_ment['status']['id']
+            logger.info(f"[NotificationPolling] Latest mention: {latest_mention_id}")
 
         while not SHUTDOWN_EVENT.is_set():
 
@@ -49,7 +54,7 @@ class NotificationPolling(ImageBotBase):
                         logger.info("[NotificationPolling] Shutting down gracefully")
                         break
 
-                    if mention['status']['id'] > latest_mention_id:
+                    if int(mention['status']['id']) > int(latest_mention_id):
                         latest_mention_id = mention['status']['id']
 
                 # Check for shutdown after processing all mentions

@@ -68,21 +68,6 @@ def validate_optional_variables():
     """
     errors = []
 
-    # Validate numeric optional variables
-    numeric_vars = {
-        'DESTINATION_MASTODON_CHAR_LIMIT': ('positive', 1),
-    }
-
-    for var_name, (validation_type, min_val) in numeric_vars.items():
-        value = os.getenv(var_name)
-        if value:
-            try:
-                int_value = int(value)
-                if validation_type == 'positive' and int_value <= min_val:
-                    errors.append(f"{var_name} must be greater than {min_val}, got: {value}")
-            except ValueError:
-                errors.append(f"{var_name} must be a valid integer, got: {value}")
-
     # Validate RUN_MODE
     run_mode = os.getenv('RUN_MODE')
     if run_mode and run_mode not in ['dev', 'prod']:

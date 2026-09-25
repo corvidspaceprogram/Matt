@@ -73,7 +73,7 @@ def fetch_new_mentions(api, min_id):
 
             for notif in batch:
                 if notif['type'] == 'mention':
-                    if notif['status']['id'] <= min_id:
+                    if int(notif['status']['id']) <= int(min_id):
                         return mentions
                     else:
                         mentions.append(notif)
