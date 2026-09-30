@@ -26,16 +26,18 @@ def post_dm(api, text, target_account):
     return response
 
 
-def post_dm_with_media(api, media_id, target_account):
+def post_dm_with_media(api, media_id, target_account, text=""):
     """Send a direct message to the admin account with the given media attachment.
 
     Args:
         api: Mastodon API instance
         media_id: Pre-resolved media ID from the cache or upload
         target_account: Account name to send the DM to
+        text: Optional message text. If empty, defaults to @target_account mention.
     """
+    status_text = f"{target_account} \n {text}" if text else f"{target_account}"
     response = api.status_post(
-        status=f"{target_account}",
+        status=status_text,
         media_ids=[media_id],
         visibility="direct"
     )

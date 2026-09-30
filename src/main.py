@@ -1,3 +1,5 @@
+import datetime
+
 import env_loader
 import glob
 import mastodon_client
@@ -120,14 +122,32 @@ class GreatReactor(ImageBotBase):
         """Poll local timeline in reverse-chronological order and reply to ':great:' reactions."""
         logger.info("[GreatReactor] Starting timeline scan")
 
-        max_id = None
+        # Configure time cutoff
+        try:
+            hours = int(os.getenv('TIMELINE_HOURS', '24'))
+        except (ValueError, TypeError):
+            hours = 24
+        cutoff_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours)
+        logger.info(f"[GreatReactor] Scanning timeline for posts within last {hours} hours")
 
-        while not SHUTDOWN_EVENT.is_set():
+        max_id = None
+        cutoff_reached = False
+
+        while not (SHUTDOWN_EVENT.is_set() or cutoff_reached):
             batch = self.mastodon_api.timeline('local', local=True, max_id=max_id)
             if not batch:
                 break
 
             for status in batch:
+                # Stop pagination if this post exceeds the time cutoff
+                try:
+                    post_time = status.get('created_at', '')
+                    if post_time < cutoff_dt:
+                        cutoff_reached = True
+                        break
+                except (ValueError, TypeError):
+                    logger.warning(f"[GreatReactor] Could not parse created_at for status {status['id']}")
+
                 # Skip bot's own posts (never reply to self)
                 if self._is_own_post(status):
                     continue
@@ -190,7 +210,7 @@ class GreatReactor(ImageBotBase):
             try:
                 mastodon_client.post_dm_with_media(
                     self.mastodon_api, media_id=media_id,
-                    target_account=self.admin_account
+                    target_account=self.admin_account, text=dm_msg
                 )
                 logger.info(f"[GreatReactor] Dev DM sent to {self.admin_account} for post URL: {post_url}")
             except Exception as e:
