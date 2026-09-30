@@ -62,6 +62,26 @@ def fetch_latest_mention(api):
         return []
 
 
+def bot_already_replied(status, mastodon_api, my_account_id):
+    """Check if the bot already replied directly to this exact status.
+
+    Only checks descendants (replies in the same thread after this status)
+    for immediate direct replies — where in_reply_to_id == status['id'].\
+    Does NOT check ancestors (parent posts).
+    """
+    try:
+        ctx = mastodon_api.status_context(status['id'])
+        # Check only immediate direct replies in descendants
+        for s in ctx.get('descendants', []):
+            if (s.get('in_reply_to_id') == status['id'] and
+                    s['account']['id'] == my_account_id):
+                return True
+        return False
+    except Exception as e:
+        logger.warning(f"[Mastodon] Error checking replies for {status['id']}: {e}")
+        return False
+
+
 def fetch_new_mentions(api, min_id):
     try:
         mentions = []
