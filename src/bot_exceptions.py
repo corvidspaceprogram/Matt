@@ -1,5 +1,5 @@
 """
-Custom exception classes for Mastodon LLM bot.
+Custom exception classes for the Mastodon Image Reply Bot.
 
 These exceptions help classify different types of errors for better
 error handling and admin notification clarity.
@@ -28,9 +28,4 @@ class ConfigurationError(MastodonBotError):
 
 class APIResponseError(MastodonBotError):
     """Invalid API responses or data format errors."""
-    pass
-
-
-class LLMError(MastodonBotError):
-    """LLM service specific errors."""
     pass

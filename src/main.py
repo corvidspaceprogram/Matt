@@ -5,9 +5,36 @@ import glob
 import mastodon_client
 import os
 import random
-import refresh_schedule
 import warning_manager
 from image_bot_base import ImageBotBase
+from threading import Event
+
+def sleep_until_shutdown(duration_seconds, shutdown_event=None):
+    """
+    Interruptible sleep that breaks down longer sleeps into 1-second chunks.
+    Checks shutdown_event periodically and returns True if terminated early.
+
+    Args:
+        duration_seconds: Total sleep duration in seconds (can be any duration)
+        shutdown_event: threading.Event to check for shutdown signal
+
+    Returns:
+        True if terminated early due to shutdown, False if completed normally
+    """
+    if duration_seconds <= 0:
+        return False
+
+    if shutdown_event is None:
+        shutdown_event = Event()
+
+    remaining = int(duration_seconds)
+
+    while remaining > 0 and not shutdown_event.is_set():
+        sleep_time = min(remaining, 1)
+        time.sleep(sleep_time)
+        remaining -= 1
+
+    return not shutdown_event.is_set() and remaining > 0
 from startup_validator import validate_all
 import traceback
 import threading
@@ -67,7 +94,7 @@ class NotificationPolling(ImageBotBase):
                     break
 
             # Poll every 10 seconds
-            terminated = refresh_schedule.sleep_until_shutdown(10, SHUTDOWN_EVENT)
+            terminated = sleep_until_shutdown(10, SHUTDOWN_EVENT)
             if terminated:
                 break
 
@@ -112,7 +139,7 @@ class GreatReactor(ImageBotBase):
                 logger.warning(f"[GreatReactor] Loop error: {e}")
                 traceback.print_exc()
 
-            terminated = refresh_schedule.sleep_until_shutdown(3600, SHUTDOWN_EVENT)
+            terminated = sleep_until_shutdown(3600, SHUTDOWN_EVENT)
             if terminated:
                 break
 

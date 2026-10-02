@@ -1,6 +1,10 @@
 # Mastodon Image Reply Bot
 
-A Python bot that responds to @mentions on Mastodon by randomly posting an attached image. In development mode (`RUN_MODE=dev`), images are sent as direct messages to a specified admin account instead of being posted publicly.
+A Python bot that runs two background tasks:
+1. Responds to @mentions on Mastodon by randomly posting an attached image
+2. Scans the local timeline for posts with `:great:` custom reactions and replies with an image
+
+In development mode (`RUN_MODE=dev`), images are sent as direct messages to a specified admin account instead of being posted publicly.
 
 Forked and substantially altered from [mastodon-markov](https://github.com/ewanc26/mastodon-markov) by ewanc26 on Github.
 
@@ -31,6 +35,7 @@ Forked and substantially altered from [mastodon-markov](https://github.com/ewanc
    # Optional variables
    ADMIN_MASTODON_ACCOUNT=<admin Mastodon account to DM reports to>
    RUN_MODE=dev  # "dev" sends images as DMs; "prod" replies publicly to mentions
+   TIMELINE_HOURS=24  # GreatReactor time cutoff in hours (default: 24)
    ```
 
 A `.env.example` file is included in `src/` for reference with all variable names and example values.
@@ -43,7 +48,7 @@ To create an access token for this application, go to Settings > Development whi
 
 ## Usage
 
-1. Place image files (`.jpg`, `.jpeg`, `.png`, `.gif`) in the `/images/` directory at the project root.
+1. Place image files (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`) in the `/images/` directory at the project root.
 
 2. Run the `main.py` script located in the `/src/` directory:
 
@@ -51,22 +56,26 @@ To create an access token for this application, go to Settings > Development whi
    python src/main.py
    ```
 
-3. The bot will respond to @mentions by randomly selecting an image and either replying with it publicly (prod mode) or sending it as a direct message to the admin account (dev mode). It also listens for notifications in real-time.
+3. The bot will:
+   - Respond to @mentions by randomly selecting an image and replying publicly (prod) or via DM (dev)
+   - Scan the local timeline for `:great:` reactions and reply with images similarly
+
+Both tasks run as separate background threads.
 
 4. Press `Ctrl+C` to stop the script gracefully.
 
 ## File Structure
 
 - `/src/`
-  - `image_bot_base.py`: Core bot class handling image selection and posting logic.
-  - `mastodon_client.py`: Interfaces with the Mastodon API for fetching mentions and posting media.
-  - `refresh_schedule.py`: Calculates timing intervals and manages sleep scheduling.
+  - `image_bot_base.py`: Base class for `NotificationPolling` and `GreatReactor`; handles image selection, uploading, and posting logic.
+  - `mastodon_client.py`: Interfaces with the Mastodon API for fetching mentions, checking replies, and posting media.
   - `env_loader.py`: Loads and manages environment variables.
   - `logger.py`: Structured logging to console + rotating file.
   - `bot_exceptions.py`: Custom exception hierarchy for the bot.
   - `startup_validator.py`: Validates configuration at startup for fail-fast error reporting.
   - `warning_manager.py`: Handles suppression of specific warnings.
-  - `main.py`: Entry point — initializes the API client and starts the notification polling thread.
+  - `check_status.py`: Helper script for inspecting Mastodon status objects by URL.
+  - `main.py`: Entry point — initializes the API client, then launches `NotificationPolling` (mention poller) and `GreatReactor` (timeline reactor) threads.
 - `/images/`: Directory containing image files the bot randomly selects from.
 
 ## Notes

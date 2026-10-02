@@ -6,7 +6,7 @@ import random
 import sys
 import traceback
 from datetime import datetime
-from bot_exceptions import ConfigurationError, FileOperationError
+from bot_exceptions import ConfigurationError
 from logger import logger
 
 

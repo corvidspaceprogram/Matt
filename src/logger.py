@@ -3,7 +3,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-logger = logging.getLogger("mastodon_llm_bot")
+logger = logging.getLogger("matt_bot")
 
 
 def setup_logging():
@@ -15,7 +15,7 @@ def setup_logging():
     """
     
     # Get logger - create if doesn't exist
-    logger = logging.getLogger("mastodon_llm_bot")
+    logger = logging.getLogger("matt_bot")
     logger.setLevel(logging.DEBUG)
     
     # Prevent duplicate handlers

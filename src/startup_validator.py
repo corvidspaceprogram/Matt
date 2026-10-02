@@ -31,9 +31,9 @@ def get_optional_env_vars():
         Dictionary of optional env vars and their defaults
     """
     return {
-        'DESTINATION_MASTODON_CHAR_LIMIT': '500',
         'ADMIN_MASTODON_ACCOUNT': None,
         'RUN_MODE': 'dev',
+        'TIMELINE_HOURS': '24',
     }
 
 
